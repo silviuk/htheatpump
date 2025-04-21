@@ -24,6 +24,8 @@
     .. code-block:: shell
 
        $ python3 httimeprog_async.py --device /dev/ttyUSB1 --baudrate 9600
+       or
+       $ python3 httimeprog_async.py --url "tcp://localhost:9999"
        idx=0, name='Warmwasser', ead=7, nos=2, ste=15, nod=7, entries=[]
        idx=1, name='Zirkulationspumpe', ead=7, nos=2, ste=15, nod=7, entries=[]
        idx=2, name='Heizung', ead=7, nos=3, ste=15, nod=7, entries=[]
@@ -56,6 +58,8 @@ async def main_async() -> None:
             Example:
 
               $ python3 httimeprog_async.py --device /dev/ttyUSB1 --baudrate 9600
+              or
+              $ python3 httimeprog_async.py --url "tcp://localhost:9999"
               idx=0, name='Warmwasser', ead=7, nos=2, ste=15, nod=7, entries=[]
               idx=1, name='Zirkulationspumpe', ead=7, nos=2, ste=15, nod=7, entries=[]
               idx=2, name='Heizung', ead=7, nos=3, ste=15, nod=7, entries=[]
@@ -80,6 +84,13 @@ async def main_async() -> None:
             """
         )
         + "\r\n",
+    )
+
+    parser.add_argument(
+        "-u",
+        "--url",
+        type=str,
+        help="the (TCP socket) url on which the heat pump is connected",
     )
 
     parser.add_argument(
@@ -146,6 +157,14 @@ async def main_async() -> None:
         help="number of entry of a specific day of a time program to query for",
     )
 
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        # Use the default timeout defined in the HtHeatpump class
+        default=AioHtHeatpump.DEFAULT_TIMEOUT,
+        help="connection timeout in seconds, default: %(default)s",
+    )
+
     args = parser.parse_args()
 
     # activate logging with level DEBUG in verbose mode
@@ -155,8 +174,18 @@ async def main_async() -> None:
     else:
         logging.basicConfig(level=logging.WARNING, format=log_format)
 
-    hp = AioHtHeatpump(args.device, baudrate=args.baudrate)
     try:
+        if (args.url):
+            # Use keyword argument 'url'
+            hp = AioHtHeatpump(url=args.url, timeout=args.timeout)
+            if args.verbose:
+                _LOGGER.info("--url specified, using url-based connection: %s", args.url)
+        else:
+            # Use keyword argument 'device' and pass serial-specific options
+            hp = AioHtHeatpump(device=args.device, baudrate=args.baudrate, timeout=args.timeout)
+            if args.verbose:
+                _LOGGER.info("--device specified, using serial connection: %s", args.device)
+
         hp.open_connection()
         await hp.login_async()
 
@@ -307,7 +336,7 @@ async def main_async() -> None:
         sys.exit(1)
     finally:
         await hp.logout_async()  # try to logout for an ordinary cancellation (if possible)
-        hp.close_connection()
+        await hp.close_connection_async()
 
     sys.exit(0)
 

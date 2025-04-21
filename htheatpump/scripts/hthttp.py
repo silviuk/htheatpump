@@ -47,6 +47,8 @@
     .. code-block:: shell
 
        $ python3 hthttp.py start --device /dev/ttyUSB1 --ip 192.168.11.91 --port 8081
+       or
+       $ python3 hthttp.py start --url "tcp://localhost:9999" --ip 192.168.11.91 --port 8081
        hthttp.py started with PID 1099
 
        $ tail /tmp/hthttp-daemon.log
@@ -286,7 +288,17 @@ class HtHttpDaemon(Daemon):
         _LOGGER.info("=== HtHttpDaemon.run() %s", "=" * 100)
         try:
             global hp
-            hp = HtHeatpump(args.device, baudrate=args.baudrate)
+
+            if (args.url):
+                # Use keyword argument 'url'
+                hp = HtHeatpump(url=args.url, timeout=args.timeout)
+                if args.verbose:
+                    _LOGGER.info("--url specified, using url-based connection: %s", args.url)
+            else:
+                # Use keyword argument 'device' and pass serial-specific options
+                hp = HtHeatpump(device=args.device, baudrate=args.baudrate, timeout=args.timeout)
+                if args.verbose:
+                    _LOGGER.info("--device specified, using serial connection: %s", args.device)
             hp.open_connection()
             hp.login()
             rid = hp.get_serial_number()
@@ -340,6 +352,8 @@ def main() -> None:
             Example:
 
               $ python3 hthttp.py start --device /dev/ttyUSB1 --ip 192.168.11.91 --port 8081
+              or
+              $ python3 hthttp.py start --url "tcp://localhost:9999" --ip 192.168.11.91 --port 8081
               hthttp.py started with PID 1099
 
               $ tail /tmp/hthttp-daemon.log
@@ -365,6 +379,13 @@ def main() -> None:
             """
         )
         + "\r\n",
+    )
+
+    parser.add_argument(
+        "-u",
+        "--url",
+        type=str,
+        help="the (TCP socket) url on which the heat pump is connected",
     )
 
     parser.add_argument(
@@ -419,6 +440,14 @@ def main() -> None:
         "--verbose",
         action="store_true",
         help="increase output verbosity by activating logging",
+    )
+
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        # Use the default timeout defined in the HtHeatpump class
+        default=HtHeatpump.DEFAULT_TIMEOUT,
+        help="connection timeout in seconds, default: %(default)s",
     )
 
     global args
