@@ -181,7 +181,7 @@ def main() -> None:
                 _LOGGER.info("--url specified, using url-based connection: %s", args.url)
         else:
             # Use keyword argument 'device' and pass serial-specific options
-            hp = HtHeatpump(device=args.device, baudrate=args.baudrate, timeout=args.timeout) # Pass timeout if needed
+            hp = HtHeatpump(device=args.device, baudrate=args.baudrate, timeout=args.timeout)
             if args.verbose:
                 _LOGGER.info("--device specified, using serial connection: %s", args.device)
         hp.open_connection()

@@ -28,9 +28,8 @@ import logging
 import re
 from typing import Dict, Final, List, Optional, Set, Tuple, Union, cast
 import socket
-from urllib.parse import urlparse
-
 import aioserial
+import time
 import serial
 
 from .htheatpump import HtHeatpump, VerifyAction
@@ -148,7 +147,7 @@ class AioHtHeatpump(HtHeatpump):
 
     def __init__(
         self,
-        device: Optional[str] = None, # Changed: Make optional
+        device: Optional[str] = None,  # Changed: Make optional
         url: Optional[str] = None,    # Added: url parameter
         baudrate: int = 115200,
         bytesize: int = serial.EIGHTBITS,
@@ -188,7 +187,7 @@ class AioHtHeatpump(HtHeatpump):
         )
 
         # Async specific attributes
-        self._loop = loop # Store loop, might be None initially
+        self._loop = loop  # Store loop, might be None initially
         self._lock = asyncio.Lock()
         self._reader: Optional[asyncio.StreamReader] = None
         self._writer: Optional[asyncio.StreamWriter] = None
@@ -198,14 +197,14 @@ class AioHtHeatpump(HtHeatpump):
         if self._ser_settings:
             # Ensure loop is available for aioserial
             if self._loop is None:
-                 try:
-                     self._loop = asyncio.get_running_loop()
-                 except RuntimeError:
-                     # If no loop running, create one (less ideal, depends on context)
-                     # Or raise an error if loop is strictly required
-                     # self._loop = asyncio.new_event_loop()
-                     # asyncio.set_event_loop(self._loop)
-                     raise RuntimeError("asyncio event loop is required for AioHtHeatpump with serial.")
+                try:
+                    self._loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    # If no loop running, create one (less ideal, depends on context)
+                    # Or raise an error if loop is strictly required
+                    # self._loop = asyncio.new_event_loop()
+                    # asyncio.set_event_loop(self._loop)
+                    raise RuntimeError("asyncio event loop is required for AioHtHeatpump with serial.")
 
             self._ser_settings.update(
                 {
@@ -232,7 +231,7 @@ class AioHtHeatpump(HtHeatpump):
         :raises RuntimeError: If neither serial nor TCP is configured.
         """
         if self.is_open:
-             raise IOError("connection objects indicate an open connection.")
+            raise IOError("connection objects indicate an open connection.")
 
         # Reset async state variables
         self._reader = None
@@ -240,19 +239,19 @@ class AioHtHeatpump(HtHeatpump):
         # Re-initialize aioserial instance if needed (settings might have changed)
         if self._ser_settings:
             if self._ser and self._ser.is_open:
-                 self._ser.close() # Close existing if open
+                self._ser.close()  # Close existing if open
             # Ensure loop is available
             if self._loop is None:
-                 try:
-                     self._loop = asyncio.get_running_loop()
-                 except RuntimeError:
-                     raise RuntimeError("asyncio event loop is required for AioHtHeatpump with serial.")
+                try:
+                    self._loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    raise RuntimeError("asyncio event loop is required for AioHtHeatpump with serial.")
             # Update loop in settings if it was None before
             self._ser_settings["loop"] = self._loop
             self._ser = aioserial.AioSerial(**self._ser_settings)
             _LOGGER.info("prepared serial connection: %s", self._ser)
         elif self._sock_settings:
-             _LOGGER.info("prepared TCP connection settings: %s", self._sock_settings)
+            _LOGGER.info("prepared TCP connection settings: %s", self._sock_settings)
         else:
             raise RuntimeError("neither serial nor socket settings are configured.")
 
@@ -264,24 +263,25 @@ class AioHtHeatpump(HtHeatpump):
 
         if self._ser_settings:
             if not self._ser:
-                 raise RuntimeError("serial instance not prepared. Call open_connection first.")
+                raise RuntimeError("serial instance not prepared. Call open_connection first.")
             if not self._ser.is_open:
-                 try:
-                     # aioserial opens implicitly, but let's ensure it
-                     # A simple check or triggering an operation might be needed
-                     # Forcing open if possible, or relying on first IO
-                     # Let's try to trigger opening via a zero-byte read
-                     await self._ser.read_async(0)
-                     _LOGGER.info("serial connection confirmed open: %s", self._ser)
-                 except (aioserial.SerialException, OSError) as e:
-                     _LOGGER.error("failed to open serial connection %s: %s", self._ser.port, e)
-                     raise IOError(f"failed to open serial connection {self._ser.port}: {e}") from e
+                try:
+                    # aioserial opens implicitly, but let's ensure it
+                    # A simple check or triggering an operation might be needed
+                    # Forcing open if possible, or relying on first IO
+                    # Let's try to trigger opening via a zero-byte read
+                    await self._ser.read_async(0)
+                    _LOGGER.info("serial connection confirmed open: %s", self._ser)
+                except (aioserial.SerialException, OSError) as e:
+                    _LOGGER.error("failed to open serial connection %s: %s", self._ser.port, e)
+                    raise IOError(f"failed to open serial connection {self._ser.port}: {e}") from e
 
         elif self._sock_settings:
             host, port = self._sock_settings["address"]
             # Use timeout from settings, fallback to default
             timeout = self._sock_settings.get("timeout")
-            if timeout is None: timeout = self.DEFAULT_TIMEOUT
+            if timeout is None:
+                timeout = self.DEFAULT_TIMEOUT
 
             try:
                 _LOGGER.debug("attempting to open TCP connection to %s:%s with timeout %s", host, port, timeout)
@@ -291,17 +291,17 @@ class AioHtHeatpump(HtHeatpump):
                 )
                 _LOGGER.info("TCP connection established successfully to %s:%s", host, port)
             except asyncio.TimeoutError:
-                 _LOGGER.error("TCP connection timed out to %s:%s", host, port)
-                 raise IOError(f"TCP connection timed out to {host}:{port}") from None
+                _LOGGER.error("TCP connection timed out to %s:%s", host, port)
+                raise IOError(f"TCP connection timed out to {host}:{port}") from None
             except (socket.gaierror, ConnectionRefusedError, OSError) as e:
-                 _LOGGER.error("TCP connection failed to %s:%s: %s", host, port, e)
-                 # Close potentially partially opened streams on failure
-                 if self._writer:
-                     self._writer.close()
-                     # await self._writer.wait_closed() # Might hang if connection failed badly
-                 self._reader = None
-                 self._writer = None
-                 raise IOError(f"TCP connection failed to {host}:{port}: {e}") from e
+                _LOGGER.error("TCP connection failed to %s:%s: %s", host, port, e)
+                # Close potentially partially opened streams on failure
+                if self._writer:
+                    self._writer.close()
+                    # await self._writer.wait_closed() # Might hang if connection failed badly
+                self._reader = None
+                self._writer = None
+                raise IOError(f"TCP connection failed to {host}:{port}: {e}") from e
         else:
             raise RuntimeError("neither serial nor socket settings are configured.")
 
@@ -315,8 +315,8 @@ class AioHtHeatpump(HtHeatpump):
                 except Exception as e:
                     _LOGGER.warning("error closing serial connection: %s", e)
                 finally:
-                    self._ser = None # Ensure instance is cleared
-                    await asyncio.sleep(0.1) # Keep delay
+                    self._ser = None  # Ensure instance is cleared
+                    await asyncio.sleep(0.1)  # Keep delay
         elif self._sock_settings:
             if self._writer:
                 try:
@@ -329,9 +329,9 @@ class AioHtHeatpump(HtHeatpump):
                 except Exception as e:
                     _LOGGER.warning("error closing TCP writer: %s", e)
                 finally:
-                    self._writer = None # Ensure cleared
-                    self._reader = None # Ensure cleared
-                    await asyncio.sleep(0.1) # Keep delay
+                    self._writer = None  # Ensure cleared
+                    self._reader = None  # Ensure cleared
+                    await asyncio.sleep(0.1)  # Keep delay
 
         # Ensure state is reset even if already closed or error occurred
         self._ser = None
@@ -341,26 +341,25 @@ class AioHtHeatpump(HtHeatpump):
     def close_connection(self) -> None:
         """Close the connection (Synchronous wrapper - Use with caution)."""
         if self.is_open:
-             _LOGGER.warning("close_connection called synchronously on AioHtHeatpump. Use close_connection_async.")
-             # Try sync close for serial if possible
-             if self._ser and self._ser.is_open:
-                 try:
-                     self._ser.close()
-                     time.sleep(0.1)
-                 except Exception as e:
-                     _LOGGER.error("synchronous close of aioserial failed: %s", e)
-             elif self._writer:
-                 _LOGGER.error("cannot synchronously close active async TCP connection. Use close_connection_async.")
-             # Reset state regardless
-             self._ser = None
-             self._reader = None
-             self._writer = None
+            _LOGGER.warning("close_connection called synchronously on AioHtHeatpump. Use close_connection_async.")
+            # Try sync close for serial if possible
+            if self._ser and self._ser.is_open:
+                try:
+                    self._ser.close()
+                    time.sleep(0.1)
+                except Exception as e:
+                    _LOGGER.error("synchronous close of aioserial failed: %s", e)
+            elif self._writer:
+                _LOGGER.error("cannot synchronously close active async TCP connection. Use close_connection_async.")
+            # Reset state regardless
+            self._ser = None
+            self._reader = None
+            self._writer = None
         else:
-             # Ensure state is reset if called when not open
-             self._ser = None
-             self._reader = None
-             self._writer = None
-
+            # Ensure state is reset if called when not open
+            self._ser = None
+            self._reader = None
+            self._writer = None
 
     async def reconnect_async(self) -> None:
         """Reconnect asynchronously (close, prepare, connect)."""
@@ -401,13 +400,15 @@ class AioHtHeatpump(HtHeatpump):
 
         try:
             if self._ser_settings:
-                if not self._ser: raise IOError("serial connection not initialized")
+                if not self._ser:
+                    raise IOError("serial connection not initialized")
                 await self._ser.write_async(req)
                 # await self._ser.drain_async() # Usually not needed for serial
             elif self._sock_settings:
-                if not self._writer: raise IOError("TCP connection not established")
+                if not self._writer:
+                    raise IOError("TCP connection not established")
                 self._writer.write(req)
-                await self._writer.drain() # Ensure data is sent over TCP
+                await self._writer.drain()  # Ensure data is sent over TCP
             else:
                 # This case should be prevented by __init__
                 raise RuntimeError("neither serial, nor socket settings are configured")
@@ -424,7 +425,8 @@ class AioHtHeatpump(HtHeatpump):
 
         # Use timeout from settings for the read operation
         timeout = self._sock_settings.get("timeout") if self._sock_settings else None
-        if timeout is None: timeout = self.DEFAULT_TIMEOUT
+        if timeout is None:
+            timeout = self.DEFAULT_TIMEOUT
 
         try:
             data = await asyncio.wait_for(self._reader.readexactly(size), timeout=timeout)
@@ -434,9 +436,10 @@ class AioHtHeatpump(HtHeatpump):
             await self.close_connection_async()
             raise IOError(f"socket read timed out waiting for {size} bytes") from None
         except asyncio.IncompleteReadError as e:
-            _LOGGER.error("socket connection closed or broke during readexactly (expected %d, got %d)", size, len(e.partial))
+            _LOGGER.error("socket connection closed or broke during readexactly "
+                          "(expected %d, got %d)", size, len(e.partial))
             await self.close_connection_async()
-            raise IOError(f"socket connection closed or broke during read (expected {size}, got {len(e.partial)})") from e
+            raise IOError("socket connection closed or broke during read") from e
         except (socket.error, OSError) as e:
             _LOGGER.error("socket error during readexactly: %s", e)
             await self.close_connection_async()
@@ -485,21 +488,23 @@ class AioHtHeatpump(HtHeatpump):
             read_timeout = self._ser.timeout if self._ser else self.DEFAULT_TIMEOUT
         elif self._sock_settings:
             read_timeout = self._sock_settings.get("timeout", self.DEFAULT_TIMEOUT)
-        if read_timeout is None: read_timeout = self.DEFAULT_TIMEOUT # Ensure a value
+        if read_timeout is None:
+            read_timeout = self.DEFAULT_TIMEOUT  # Ensure a value
 
         # Read header
         try:
             if self._ser_settings:
-                if not self._ser: raise IOError("serial connection not initialized")
+                if not self._ser:
+                    raise IOError("serial connection not initialized")
                 header = await asyncio.wait_for(self._ser.read_async(RESPONSE_HEADER_LEN), timeout=read_timeout)
             elif self._sock_settings:
-                header = await self._socket_recvall_async(RESPONSE_HEADER_LEN) # Uses internal timeout
+                header = await self._socket_recvall_async(RESPONSE_HEADER_LEN)  # Uses internal timeout
             else:
                 raise RuntimeError("neither serial, nor socket settings are configured.")
         except (IOError, asyncio.TimeoutError, aioserial.SerialException, socket.error, OSError) as e:
-             _LOGGER.error("failed reading response header: %s", e)
-             await self.close_connection_async()
-             raise IOError(f"failed reading response header: {e}") from e
+            _LOGGER.error("failed reading response header: %s", e)
+            await self.close_connection_async()
+            raise IOError(f"failed reading response header: {e}") from e
 
         if not header or len(header) < RESPONSE_HEADER_LEN:
             await self.close_connection_async()
@@ -512,14 +517,15 @@ class AioHtHeatpump(HtHeatpump):
         # Read payload length byte
         try:
             if self._ser_settings:
-                if not self._ser: raise IOError("serial connection not initialized")
+                if not self._ser:
+                    raise IOError("serial connection not initialized")
                 payload_len_r_bytes = await asyncio.wait_for(self._ser.read_async(1), timeout=read_timeout)
-            else: # Socket
-                payload_len_r_bytes = await self._socket_recvall_async(1) # Uses internal timeout
+            else:  # Socket
+                payload_len_r_bytes = await self._socket_recvall_async(1)  # Uses internal timeout
         except (IOError, asyncio.TimeoutError, aioserial.SerialException, socket.error, OSError) as e:
-             _LOGGER.error("failed reading payload length: %s", e)
-             await self.close_connection_async()
-             raise IOError(f"failed reading payload length: {e}") from e
+            _LOGGER.error("failed reading payload length: %s", e)
+            await self.close_connection_async()
+            raise IOError(f"failed reading payload length: {e}") from e
 
         if not payload_len_r_bytes:
             await self.close_connection_async()
@@ -545,40 +551,42 @@ class AioHtHeatpump(HtHeatpump):
 
                     try:
                         # Read one byte with a smaller, per-byte timeout or rely on overall
-                        byte_timeout = min(0.5, read_timeout) # Example: 0.5s per byte
+                        byte_timeout = min(0.5, read_timeout)  # Example: 0.5s per byte
                         if self._ser_settings:
-                            if not self._ser: raise IOError("serial connection not initialized")
+                            if not self._ser:
+                                raise IOError("serial connection not initialized")
                             tmp = await asyncio.wait_for(self._ser.read_async(1), timeout=byte_timeout)
-                        else: # Socket
+                        else:  # Socket
                             tmp = await asyncio.wait_for(self._socket_recvall_async(1), timeout=byte_timeout)
 
                         if not tmp:
                             raise IOError("data stream broken (received empty byte)")
                         payload += tmp
                     except asyncio.TimeoutError:
-                         # This might happen if there's a pause, continue loop if overall timeout not exceeded
-                         _LOGGER.debug("per-byte read timeout, continuing if overall time allows.")
-                         continue # Or raise immediately: raise IOError("Timeout while reading payload chunk (len=0)") from None
+                        # This might happen if there's a pause, continue loop if overall timeout not exceeded
+                        _LOGGER.debug("per-byte read timeout, continuing if overall time allows.")
+                        continue
                     except (IOError, aioserial.SerialException, socket.error, OSError) as e:
-                         raise IOError(f"failed reading payload chunk (len=0): {e}") from e
+                        raise IOError(f"failed reading payload chunk (len=0): {e}") from e
 
                 actual_payload_len = len(payload)
             else:
                 # Read payload_len_r bytes
                 if self._ser_settings:
-                    if not self._ser: raise IOError("serial connection not initialized")
+                    if not self._ser:
+                        raise IOError("serial connection not initialized")
                     payload = await asyncio.wait_for(self._ser.read_async(payload_len_r), timeout=read_timeout)
-                else: # Socket
-                    payload = await self._socket_recvall_async(payload_len_r) # Uses internal timeout
+                else:  # Socket
+                    payload = await self._socket_recvall_async(payload_len_r)  # Uses internal timeout
 
                 if not payload or len(payload) < payload_len_r:
-                    raise IOError(f"data stream broken reading payload (incomplete, expected {payload_len_r}, got {len(payload)})")
+                    raise IOError("data stream broken reading payload")
                 actual_payload_len = len(payload)
 
         except (IOError, asyncio.TimeoutError, aioserial.SerialException, socket.error, OSError) as e:
-             _LOGGER.error("failed reading payload: %s", e)
-             await self.close_connection_async()
-             raise IOError(f"failed reading payload: {e}") from e
+            _LOGGER.error("failed reading payload: %s", e)
+            await self.close_connection_async()
+            raise IOError(f"failed reading payload: {e}") from e
 
         # Correct payload length for checksum computation based on header
         # Call the function to get the corrected length value
@@ -587,14 +595,15 @@ class AioHtHeatpump(HtHeatpump):
         # Read checksum byte
         try:
             if self._ser_settings:
-                if not self._ser: raise IOError("serial connection not initialized")
+                if not self._ser:
+                    raise IOError("serial connection not initialized")
                 checksum_bytes = await asyncio.wait_for(self._ser.read_async(1), timeout=read_timeout)
-            else: # Socket
-                checksum_bytes = await self._socket_recvall_async(1) # Uses internal timeout
+            else:  # Socket
+                checksum_bytes = await self._socket_recvall_async(1)  # Uses internal timeout
         except (IOError, asyncio.TimeoutError, aioserial.SerialException, socket.error, OSError) as e:
-             _LOGGER.error("failed reading checksum: %s", e)
-             await self.close_connection_async()
-             raise IOError(f"failed reading checksum: {e}") from e
+            _LOGGER.error("failed reading checksum: %s", e)
+            await self.close_connection_async()
+            raise IOError(f"failed reading checksum: {e}") from e
 
         if not checksum_bytes:
             await self.close_connection_async()
@@ -623,10 +632,11 @@ class AioHtHeatpump(HtHeatpump):
         _LOGGER.debug("received async response raw: %s", header + payload_len_r_bytes + payload + checksum_bytes)
         _LOGGER.debug("  header = %r", header)
         # Use the calculated value in the debug log
-        _LOGGER.debug("  payload length = %d (orig=%d, actual=%d)", corrected_payload_len_val, payload_len_r, actual_payload_len)
+        _LOGGER.debug("  payload length = %d (orig=%d, actual=%d)",
+                      corrected_payload_len_val, payload_len_r, actual_payload_len)
         _LOGGER.debug("  payload = %r", payload)
         _LOGGER.debug("  checksum = %#04x", checksum)
-        
+
         # Extract data
         try:
             decoded_payload = payload.decode("ascii")
@@ -639,9 +649,9 @@ class AioHtHeatpump(HtHeatpump):
             await self.close_connection_async()
             raise IOError(f"failed to decode payload as ASCII: {e} [{payload!r}]") from e
         except IOError as e:
-             _LOGGER.error("error extracting data: %s", e)
-             await self.close_connection_async()
-             raise e # Re-raise the extraction error
+            _LOGGER.error("error extracting data: %s", e)
+            await self.close_connection_async()
+            raise e  # Re-raise the extraction error
 
     # --- Async API Methods ---
 
@@ -668,7 +678,7 @@ class AioHtHeatpump(HtHeatpump):
         """
         async with self._lock:
             # Ensure connection is established before login attempt
-            await self.connect_async() # Ensures connection is open
+            await self.connect_async()  # Ensures connection is open
 
             success = False
             retry = 0
@@ -689,12 +699,12 @@ class AioHtHeatpump(HtHeatpump):
                             await self.reconnect_async()
                         except Exception as recon_ex:
                             _LOGGER.error("reconnect failed: %s", recon_ex)
-                            break # Stop retrying if reconnect fails
-                        await asyncio.sleep(0.2 * retry) # Slight backoff
+                            break  # Stop retrying if reconnect fails
+                        await asyncio.sleep(0.2 * retry)  # Slight backoff
 
             if not success:
                 _LOGGER.error("login failed after %d try/tries", retry)
-                await self.close_connection_async() # Ensure closed on final failure
+                await self.close_connection_async()  # Ensure closed on final failure
                 raise IOError(f"login failed after {retry} try/tries")
 
             _LOGGER.info("login successful")
@@ -704,15 +714,15 @@ class AioHtHeatpump(HtHeatpump):
     async def logout_async(self) -> None:
         """Log out from the heat pump session asynchronously and close connection."""
         if not self.is_open:
-             _LOGGER.info("connection already closed, skipping logout.")
-             return
+            _LOGGER.info("connection already closed, skipping logout.")
+            return
 
         # Use lock to prevent concurrent operations during logout/close
         async with self._lock:
             # Check again inside lock
             if not self.is_open:
-                 _LOGGER.info("connection closed before logout could proceed.")
-                 return
+                _LOGGER.info("connection closed before logout could proceed.")
+                return
             try:
                 await self.send_request_async(LOGOUT_CMD)
                 resp = await self.read_response_async()
@@ -724,8 +734,8 @@ class AioHtHeatpump(HtHeatpump):
             except Exception as ex:
                 _LOGGER.warning("logout command failed: %s", ex)
             finally:
-                 # Always close the connection after attempting logout
-                 await self.close_connection_async()
+                # Always close the connection after attempting logout
+                await self.close_connection_async()
 
     async def get_serial_number_async(self) -> int:
         """Query for the manufacturer's serial number of the heat pump.

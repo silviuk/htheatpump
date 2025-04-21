@@ -87,7 +87,8 @@ async def main_async() -> None:
 
     parser.add_argument(
         "-u", "--url", type=str,
-        help="the TCP URL (e.g., tcp://192.168.1.100:9999) at which the heatpump is reachable. Provide either --device or --url.",
+        help="the TCP URL (e.g., tcp://192.168.1.100:9999) at which the heatpump is reachable."
+        " Provide either --device or --url.",
     )
 
     parser.add_argument(
@@ -135,9 +136,9 @@ async def main_async() -> None:
         nargs="*",
         help="parameter name(s) to query for (as defined in htparams.csv) or omit to query for all known parameters",
     )
-    
+
     parser.add_argument(
-        "--timeout", type=float, default=AioHtHeatpump.DEFAULT_TIMEOUT, # Use default from AioHtHeatpump
+        "--timeout", type=float, default=AioHtHeatpump.DEFAULT_TIMEOUT,  # Use default from AioHtHeatpump
         help="connection timeout in seconds, default: %(default)s",
     )
 
@@ -156,10 +157,12 @@ async def main_async() -> None:
     try:
         if args.url:
             hp = AioHtHeatpump(url=args.url, timeout=args.timeout)
-            if args.verbose: _LOGGER.info("Using TCP connection: %s", args.url)
-        else: # args.device must be set
+            if args.verbose:
+                _LOGGER.info("Using TCP connection: %s", args.url)
+        else:  # args.device must be set
             hp = AioHtHeatpump(device=args.device, baudrate=args.baudrate, timeout=args.timeout)
-            if args.verbose: _LOGGER.info("Using serial connection: %s", args.device)
+            if args.verbose:
+                _LOGGER.info("Using serial connection: %s", args.device)
 
         hp.open_connection()
         await hp.login_async()

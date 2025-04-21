@@ -165,10 +165,12 @@ async def main_async() -> None:
     try:
         if args.url:
             hp = AioHtHeatpump(url=args.url, timeout=args.timeout)
-            if args.verbose: _LOGGER.info("Using TCP connection: %s", args.url)
-        else: # args.device must be set
+            if args.verbose:
+                _LOGGER.info("Using TCP connection: %s", args.url)
+        else:  # args.device must be set
             hp = AioHtHeatpump(device=args.device, baudrate=args.baudrate, timeout=args.timeout)
-            if args.verbose: _LOGGER.info("Using serial connection: %s", args.device)
+            if args.verbose:
+                _LOGGER.info("Using serial connection: %s", args.device)
 
         hp.open_connection()
         await hp.login_async()

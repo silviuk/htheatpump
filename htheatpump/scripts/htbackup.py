@@ -92,7 +92,7 @@ def main() -> None:
         "-u", "--url", type=str,
         help="the TCP URL (e.g., tcp://192.168.1.100:9999). Provide either --device or --url.",
     )
-    
+
     parser.add_argument(
         "-d",
         "--device",
@@ -164,11 +164,13 @@ def main() -> None:
     try:
         if args.url:
             hp = HtHeatpump(url=args.url, timeout=args.timeout)
-            if args.verbose: _LOGGER.info("Using TCP connection: %s", args.url)
-        else: # args.device must be set
+            if args.verbose:
+                _LOGGER.info("Using TCP connection: %s", args.url)
+        else:  # args.device must be set
             hp = HtHeatpump(device=args.device, baudrate=args.baudrate, timeout=args.timeout)
-            if args.verbose: _LOGGER.info("Using serial connection: %s", args.device)
-        
+            if args.verbose:
+                _LOGGER.info("Using serial connection: %s", args.device)
+
         hp.open_connection()
         hp.login()
 

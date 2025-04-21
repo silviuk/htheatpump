@@ -260,7 +260,7 @@ class HtHeatpump:
                 "exclusive": exclusive,
             }
             self._ser = None
-        else: # url must be not None
+        else:  # url must be not None
             assert url is not None
             # store the socket settings for later connection establishment
             url_components = urlparse(url)
@@ -282,11 +282,11 @@ class HtHeatpump:
 
     def __del__(self) -> None:
         # close the connection if still established
-        if self._ser_settings is not None: # Check if serial was configured
+        if self._ser_settings is not None:  # Check if serial was configured
             if self._ser and self._ser.is_open:
                 # close the serial connection
                 self._ser.close()
-        elif self._sock_settings is not None: # Check if socket was configured
+        elif self._sock_settings is not None:  # Check if socket was configured
             # close the socket connection
             if self._sock:
                 self._sock.close()
@@ -313,13 +313,13 @@ class HtHeatpump:
         :raises SerialException:
             In case the serial device can not be found or can not be configured.
         """
-        if self._ser_settings is not None: # Use serial
+        if self._ser_settings is not None:  # Use serial
             if self._ser:
                 raise IOError("serial connection already open")
             # open the serial connection (must fit with the settings on the heat pump!)
             self._ser = serial.Serial(**self._ser_settings)
             _LOGGER.info(self._ser)  # log serial connection properties
-        elif self._sock_settings is not None: # Use socket
+        elif self._sock_settings is not None:  # Use socket
             if self._sock:
                 raise IOError("TCP connection already established")
             # establish the connection
@@ -331,7 +331,7 @@ class HtHeatpump:
 
     def reconnect(self) -> None:
         """Reconnect to the heat pump."""
-        if self._ser_settings is not None: # Use serial
+        if self._ser_settings is not None:  # Use serial
             """If serial, perform a reconnect of the serial connection. Flush the output and
             input buffer, close the serial connection and open it again.
             """
@@ -340,20 +340,20 @@ class HtHeatpump:
                 self._ser.reset_input_buffer()
                 self.close_connection()
             self.open_connection()
-        elif self._sock_settings is not None: # Use socket
+        elif self._sock_settings is not None:  # Use socket
             if self._sock:
                 self.close_connection()
             self.open_connection()
 
     def close_connection(self) -> None:
-        if self._ser_settings is not None: # Use serial
+        if self._ser_settings is not None:  # Use serial
             """Close the serial connection."""
             if self._ser and self._ser.is_open:
                 self._ser.close()
                 self._ser = None
                 # we wait for 100ms, as it should be avoided to reopen the connection to fast
                 time.sleep(0.1)
-        elif self._sock_settings is not None: # Use socket
+        elif self._sock_settings is not None:  # Use socket
             """Close the tcp connection."""
             if self._sock:
                 self._sock.close()
@@ -368,9 +368,9 @@ class HtHeatpump:
         :returns: The state of the connection as :obj:`bool`.
         :rtype: ``bool``
         """
-        if self._ser_settings is not None: # Use serial
+        if self._ser_settings is not None:  # Use serial
             return self._ser is not None and self._ser.is_open
-        elif self._sock_settings is not None: # Use socket
+        elif self._sock_settings is not None:  # Use socket
             if self._sock is None:
                 return False
             self._sock.setblocking(False)
@@ -384,7 +384,7 @@ class HtHeatpump:
                 return False  # socket was closed for some other reason
             finally:
                 self._sock.setblocking(True)
-    
+
     @property
     def verify_param_action(self) -> Set[VerifyAction]:
         """Property to specify the actions which should be performed during the parameter verification.
@@ -431,21 +431,21 @@ class HtHeatpump:
         :raises IOError:
             Will be raised when the connection is not established.
         """
-        if self._ser_settings is not None: # Use serial
+        if self._ser_settings is not None:  # Use serial
             if not self._ser:
                 raise IOError("serial connection not open")
             req = create_request(cmd)
             _LOGGER.debug("send request: [%s]", req)
             self._ser.write(req)
-        elif self._sock_settings is not None: # Use socket
+        elif self._sock_settings is not None:  # Use socket
             if not self._sock:
                 raise IOError("TCP connection not established")
             req = create_request(cmd)
             _LOGGER.debug("send request: [%s]", req)
             try:
-                 self._sock.sendall(req)
+                self._sock.sendall(req)
             except socket.error as e:
-                 raise IOError(f"TCP send failed: {e}") from e
+                raise IOError(f"TCP send failed: {e}") from e
         else:
             raise RuntimeError("Neither serial nor socket settings are configured.")
 
@@ -505,12 +505,12 @@ class HtHeatpump:
         """
         # Read header
         try:
-            if self._ser_settings is not None: # Use serial
+            if self._ser_settings is not None:  # Use serial
                 if not self._ser:
                     raise IOError("serial connection not open")
                 # read the header of the response message
                 header = self._ser.read(RESPONSE_HEADER_LEN)
-            elif self._sock_settings is not None: # Use socket
+            elif self._sock_settings is not None:  # Use socket
                 if not self._sock:
                     raise IOError("connection not established")
                 # read the header of the response message
@@ -518,22 +518,22 @@ class HtHeatpump:
             else:
                 raise RuntimeError("Neither serial nor socket settings are configured.")
         except (IOError, socket.error, serial.SerialException) as e:
-             raise IOError(f"Failed reading response header: {e}") from e
+            raise IOError(f"Failed reading response header: {e}") from e
 
         if not header or len(header) < RESPONSE_HEADER_LEN:
             raise IOError("data stream broken during reading response header")
         elif header not in RESPONSE_HEADER:
             raise IOError("invalid or unknown response header [{}]".format(header))
-        
+
         # read the length of the following payload
         try:
             if self._ser_settings is not None:
                 payload_len_r = self._ser.read(1)
-            else: # Socket
+            else:  # Socket
                 payload_len_r = self._socket_recvall(1)
         except (IOError, socket.error, serial.SerialException) as e:
-             raise IOError(f"Failed reading payload length: {e}") from e
-        
+            raise IOError(f"Failed reading payload length: {e}") from e
+
         if not payload_len_r:
             raise IOError("data stream broken during reading payload length")
         payload_len = payload_len_r = payload_len_r[0]
@@ -552,9 +552,9 @@ class HtHeatpump:
             while payload[-2:] != b"\r\n":
                 try:
                     # --- Start of Correction 1 ---
-                    if self._ser_settings is not None: # Check self._ser_settings
+                    if self._ser_settings is not None:  # Check self._ser_settings
                         tmp = self._ser.read(1)
-                    else: # Socket (self._sock_settings must be not None)
+                    else:  # Socket (self._sock_settings must be not None)
                         tmp = self._socket_recvall(1)
                 except (IOError, socket.error, serial.SerialException) as e:
                     raise IOError(f"Failed reading payload chunk (len=0): {e}") from e
@@ -569,27 +569,26 @@ class HtHeatpump:
         else:
             # read the payload itself
             try:
-                if self._ser_settings is not None: # Check self._ser_settings
-                    payload = self._ser.read(payload_len_r) # Read using the original reported length
-                else: # Socket (self._sock_settings must be not None)
-                    payload = self._socket_recvall(payload_len_r) # Read using the original reported length
+                if self._ser_settings is not None:  # Check self._ser_settings
+                    payload = self._ser.read(payload_len_r)  # Read using the original reported length
+                else:  # Socket (self._sock_settings must be not None)
+                    payload = self._socket_recvall(payload_len_r)  # Read using the original reported length
             except (IOError, socket.error, serial.SerialException) as e:
-                 raise IOError(f"Failed reading payload (len={payload_len_r}): {e}") from e
+                raise IOError(f"Failed reading payload (len={payload_len_r}): {e}") from e
 
             if not payload or len(payload) < payload_len:
                 raise IOError("data stream broken during reading payload")
         # depending on the received header correct the payload length for the checksum computation,
         #   so that the received checksum fits with the computed one
         payload_len = RESPONSE_HEADER[header]["payload_len"](payload_len)
-        
         # read the checksum and verify the validity of the response
         try:
             if self._ser_settings is not None:
                 checksum = self._ser.read(1)
-            else: # Socket
+            else:  # Socket
                 checksum = self._socket_recvall(1)
         except (IOError, socket.error, serial.SerialException) as e:
-             raise IOError(f"Failed reading checksum: {e}") from e
+            raise IOError(f"Failed reading checksum: {e}") from e
 
         if not checksum:
             raise IOError("data stream broken during reading checksum")
@@ -620,7 +619,7 @@ class HtHeatpump:
         _LOGGER.debug("  payload length = %d(%d)", payload_len, payload_len_r)
         _LOGGER.debug("  payload = %s", payload)
         _LOGGER.debug("  checksum = %s", hex(checksum))
-        
+
         # extract the relevant data from the payload (without header '~' and trailer ';\r\n')
         m = re.match(r"^~([^;]*);\r\n$", payload.decode("ascii"))
         if not m:
