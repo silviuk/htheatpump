@@ -25,6 +25,8 @@
     .. code-block:: shell
 
        $ python3 htfastquery.py --device /dev/ttyUSB1 "Temp. Vorlauf" "Temp. Ruecklauf"
+       or
+       $ python3 htfastquery.py --url "tcp://localhost:9999" "Temp. Vorlauf" "Temp. Ruecklauf"
        Temp. Ruecklauf [MP,04]: 25.2
        Temp. Vorlauf   [MP,03]: 25.3
 
@@ -60,6 +62,8 @@ def main() -> None:
             Example:
 
               $ python3 htfastquery.py --device /dev/ttyUSB1 "Temp. Vorlauf" "Temp. Ruecklauf"
+              or
+              $ python3 htfastquery.py --url "tcp://localhost:9999" "Temp. Vorlauf" "Temp. Ruecklauf"
               Temp. Ruecklauf [MP,04]: 25.2
               Temp. Vorlauf   [MP,03]: 25.3
             """
@@ -81,6 +85,13 @@ def main() -> None:
             """
         )
         + "\r\n",
+    )
+
+    parser.add_argument(
+        "-u",
+        "--url",
+        type=str,
+        help="the (TCP socket) url on which the heat pump is connected",
     )
 
     parser.add_argument(
@@ -130,6 +141,14 @@ def main() -> None:
         "all known parameters representing a MP data point",
     )
 
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        # Use the default timeout defined in the HtHeatpump class
+        default=HtHeatpump.DEFAULT_TIMEOUT,
+        help="connection timeout in seconds, default: %(default)s",
+    )
+
     args = parser.parse_args()
 
     # activate logging with level DEBUG in verbose mode
@@ -139,8 +158,18 @@ def main() -> None:
     else:
         logging.basicConfig(level=logging.WARNING, format=log_format)
 
-    hp = HtHeatpump(args.device, baudrate=args.baudrate)
     try:
+        if (args.url):
+            # Use keyword argument 'url'
+            hp = HtHeatpump(url=args.url, timeout=args.timeout)
+            if args.verbose:
+                _LOGGER.info("--url specified, using url-based connection: %s", args.url)
+        else:
+            # Use keyword argument 'device' and pass serial-specific options
+            hp = HtHeatpump(device=args.device, baudrate=args.baudrate, timeout=args.timeout) # Pass timeout if needed
+            if args.verbose:
+                _LOGGER.info("--device specified, using serial connection: %s", args.device)
+
         hp.open_connection()
         hp.login()
 
