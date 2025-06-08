@@ -189,6 +189,10 @@ class HtHeatpump:
     :type verify_param_action: None or set
     :param verify_param_error: Interpretation of parameter verification failure as error enabled.
     :type verify_param_error: bool
+    _ser_settings: Optional[Dict[str, Any]]
+    _sock_settings: Optional[Dict[str, Any]]
+    _ser: Optional[serial.Serial]
+    _sock: Optional[socket.socket]
 
     Example::
 
