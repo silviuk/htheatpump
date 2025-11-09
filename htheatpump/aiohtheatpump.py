@@ -26,7 +26,7 @@ import copy
 import datetime
 import logging
 import re
-from typing import Dict, Final, List, Optional, Set, Tuple, Union, cast
+from typing import Any, Dict, Final, List, Optional, Set, Tuple, Union, cast
 import socket
 import aioserial
 import time
@@ -121,6 +121,11 @@ class AioHtHeatpump(HtHeatpump):
     :type cancel_read_timeout: int
     :param cancel_write_timeout: TODO
     :type cancel_write_timeout: int
+    _ser_settings: Optional[Dict[str, Any]]
+    _sock_settings: Optional[Dict[str, Any]]
+    _ser: Optional[aioserial.AioSerial]
+    _reader: Optional[asyncio.StreamReader]
+    _writer: Optional[asyncio.StreamWriter]
 
     Example::
 
@@ -147,8 +152,8 @@ class AioHtHeatpump(HtHeatpump):
 
     def __init__(
         self,
-        device: Optional[str] = None,  # Changed: Make optional
-        url: Optional[str] = None,    # Added: url parameter
+        url: Optional[str] = None,
+        device: Optional[str] = None,
         baudrate: int = 115200,
         bytesize: int = serial.EIGHTBITS,
         parity: str = serial.PARITY_NONE,
@@ -169,43 +174,28 @@ class AioHtHeatpump(HtHeatpump):
         """Initialize the AioHtHeatpump class."""
 
         super().__init__(
-            url,
-            device,
-            baudrate,
-            bytesize,
-            parity,
-            stopbits,
-            timeout,
-            xonxoff,
-            rtscts,
-            write_timeout,
-            dsrdtr,
-            inter_byte_timeout,
-            exclusive,
-            verify_param_action,
-            verify_param_error,
+            url=url,
+            device=device,
+            baudrate=baudrate,
+            bytesize=bytesize,
+            parity=parity,
+            stopbits=stopbits,
+            timeout=timeout,
+            xonxoff=xonxoff,
+            rtscts=rtscts,
+            write_timeout=write_timeout,
+            dsrdtr=dsrdtr,
+            inter_byte_timeout=inter_byte_timeout,
+            exclusive=exclusive,
+            verify_param_action=verify_param_action,
+            verify_param_error=verify_param_error,
         )
-
-        # Async specific attributes
-        self._loop = loop  # Store loop, might be None initially
+        self._loop = loop if loop else asyncio.get_running_loop()
         self._lock = asyncio.Lock()
-        self._reader: Optional[asyncio.StreamReader] = None
-        self._writer: Optional[asyncio.StreamWriter] = None
-        # _ser (aioserial instance) is handled below
+        self._reader = None
+        self._writer = None
 
-        # update the settings for later connection establishment
         if self._ser_settings:
-            # Ensure loop is available for aioserial
-            if self._loop is None:
-                try:
-                    self._loop = asyncio.get_running_loop()
-                except RuntimeError:
-                    # If no loop running, create one (less ideal, depends on context)
-                    # Or raise an error if loop is strictly required
-                    # self._loop = asyncio.new_event_loop()
-                    # asyncio.set_event_loop(self._loop)
-                    raise RuntimeError("asyncio event loop is required for AioHtHeatpump with serial.")
-
             self._ser_settings.update(
                 {
                     "loop": self._loop,
@@ -213,11 +203,8 @@ class AioHtHeatpump(HtHeatpump):
                     "cancel_write_timeout": cancel_write_timeout,
                 }
             )
-            # Initialize aioserial instance (but don't open yet)
-            # Parent __init__ sets self._ser to None, override here
             self._ser = aioserial.AioSerial(**self._ser_settings)
         else:
-            # If URL is used, parent __init__ sets self._ser to None, which is correct
             self._ser = None
 
         # _sock_settings is populated by parent __init__ if url was provided

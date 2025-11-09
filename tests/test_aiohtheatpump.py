@@ -33,6 +33,31 @@ from htheatpump.htparams import HtDataTypes, HtParam, HtParams
 from htheatpump.httimeprog import TimeProgEntry, TimeProgram
 
 
+@pytest.mark.skip(reason="TCP tests are not yet implemented")
+class TestAioHtHeatpumpWithTcp:
+    """Test AioHtHeatpump with a mocked TCP connection."""
+
+    @pytest.mark.asyncio
+    async def test_init_with_tcp(self):
+        """Test initialization of AioHtHeatpump with a TCP connection."""
+        pass
+
+    @pytest.mark.asyncio
+    async def test_send_request_tcp_async(self):
+        """Test sending a request over a TCP connection asynchronously."""
+        pass
+
+    @pytest.mark.asyncio
+    async def test_read_response_tcp_async(self):
+        """Test reading a response from a TCP connection asynchronously."""
+        pass
+
+    @pytest.mark.asyncio
+    async def test_reconnect_tcp_async(self):
+        """Test reconnecting a TCP connection asynchronously."""
+        pass
+
+
 @pytest.mark.parametrize(
     "s, checksum",
     [

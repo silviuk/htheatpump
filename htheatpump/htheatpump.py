@@ -28,7 +28,7 @@ import logging
 import re
 import time
 from types import TracebackType
-from typing import Final, Dict, List, Optional, Set, Tuple, Type, Union, cast
+from typing import Any, Final, Dict, List, Optional, Set, Tuple, Type, Union, cast
 
 import serial
 import socket
@@ -158,9 +158,8 @@ class VerificationException(ValueError):  # pragma: no cover
 class HtHeatpump:
     """Object which encapsulates the communication with the Heliotherm heat pump.
 
-    :param url: The internet address (:data:`tcp://hostname:port`) to connect to
-        (e.g. :data:`tcp://192.168.1.2:8123`). Must include the scheme :data:`tcp`.
-    :type url: str
+    :param url: The TCP URL (e.g., tcp://192.168.1.100:9999). Provide either device or url.
+    :type url: Optional[str]
     :param device: The serial device to attach to (e.g. :data:`/dev/ttyUSB0`).
     :type device: str
     :param baudrate: The baud rate to use for the serial device.
@@ -189,28 +188,12 @@ class HtHeatpump:
     :type verify_param_action: None or set
     :param verify_param_error: Interpretation of parameter verification failure as error enabled.
     :type verify_param_error: bool
+    """
     _ser_settings: Optional[Dict[str, Any]]
     _sock_settings: Optional[Dict[str, Any]]
     _ser: Optional[serial.Serial]
     _sock: Optional[socket.socket]
 
-    Example::
-
-        hp = HtHeatpump("/dev/ttyUSB0", baudrate=9600)
-        # or
-        hp = HtHeatpump("tcp://localhost:9999")
-
-        try:
-            hp.open_connection()
-            hp.login()
-            # query for the outdoor temperature
-            temp = hp.get_param("Temp. Aussen")
-            print(temp)
-            # ...
-        finally:
-            hp.logout()  # try to logout for an ordinary cancellation (if possible)
-            hp.close_connection()
-    """
 
     DEFAULT_TIMEOUT: Final[int] = 5
     """Timeout value in seconds; normally no need to change it."""
@@ -367,7 +350,7 @@ class HtHeatpump:
 
     @property
     def is_open(self) -> bool:
-        """Return the state of the connection, whether it’s established or not.
+        """Return the state of the connection, whether it's established or not.
 
         :returns: The state of the connection as :obj:`bool`.
         :rtype: ``bool``

@@ -31,6 +31,27 @@ from htheatpump.htparams import HtDataTypes, HtParam, HtParams
 from htheatpump.httimeprog import TimeProgEntry, TimeProgram
 
 
+@pytest.mark.skip(reason="TCP tests are not yet implemented")
+class TestHtHeatpumpWithTcp:
+    """Test HtHeatpump with a mocked TCP connection."""
+
+    def test_init_with_tcp(self):
+        """Test initialization of HtHeatpump with a TCP connection."""
+        pass
+
+    def test_send_request_tcp(self):
+        """Test sending a request over a TCP connection."""
+        pass
+
+    def test_read_response_tcp(self):
+        """Test reading a response from a TCP connection."""
+        pass
+
+    def test_reconnect_tcp(self):
+        """Test reconnecting a TCP connection."""
+        pass
+
+
 @pytest.mark.parametrize(
     "s, checksum",
     [
