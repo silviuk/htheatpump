@@ -16,5 +16,6 @@ Thanks to
 * Alois,
 * Simon and
 * Felix (`FelixPetriconi <https://github.com/FelixPetriconi>`_)
+* Silviu (`Silviu <https://github.com/silviuk>`_)
 
 for their contribution with testing the functionality of this module.
