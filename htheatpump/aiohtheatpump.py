@@ -168,6 +168,9 @@ class AioHtHeatpump(HtHeatpump):
     ) -> None:
         """Initialize the AioHtHeatpump class."""
 
+        if (device is None and url is None) or (device is not None and url is not None):
+            raise ValueError("Exactly one of 'device' or 'url' must be provided.")
+
         super().__init__(
             url,
             device,
@@ -192,6 +195,39 @@ class AioHtHeatpump(HtHeatpump):
         self._reader: Optional[asyncio.StreamReader] = None
         self._writer: Optional[asyncio.StreamWriter] = None
         # _ser (aioserial instance) is handled below
+
+        # Initialize settings if not present (parent class might not set them)
+        if not hasattr(self, "_ser_settings"):
+            self._ser_settings = None
+        if not hasattr(self, "_sock_settings"):
+            self._sock_settings = None
+
+        if device and self._ser_settings is None:
+            self._ser_settings = {
+                "port": device,
+                "baudrate": baudrate,
+                "bytesize": bytesize,
+                "parity": parity,
+                "stopbits": stopbits,
+                "timeout": timeout,
+                "xonxoff": xonxoff,
+                "rtscts": rtscts,
+                "write_timeout": write_timeout,
+                "dsrdtr": dsrdtr,
+                "inter_byte_timeout": inter_byte_timeout,
+                "exclusive": exclusive,
+            }
+
+        if url and self._sock_settings is None:
+            # Parse URL (e.g. tcp://192.168.1.100:9999)
+            _url = url
+            if _url.startswith("tcp://"):
+                _url = _url[6:]
+            host, port = _url.split(":")
+            self._sock_settings = {
+                "address": (host, int(port)),
+                "timeout": timeout,
+            }
 
         # update the settings for later connection establishment
         if self._ser_settings:

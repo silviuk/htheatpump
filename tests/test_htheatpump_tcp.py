@@ -292,7 +292,7 @@ class TestHtHeatpumpTCP:
     def test_verify_param_action(
         self, cmdopt_url: str, action: Set[VerifyAction]
     ) -> None:
-        hp = HtHeatpump(url=cmdopt_url)
+        hp = HtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
         val = hp.verify_param_action
         assert isinstance(val, set)
         hp.verify_param_action = action
@@ -301,7 +301,7 @@ class TestHtHeatpumpTCP:
         # assert 0
 
     def test_verify_param_error(self, cmdopt_url: str) -> None:
-        hp = HtHeatpump(url=cmdopt_url)
+        hp = HtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
         val = hp.verify_param_error
         assert isinstance(val, bool)
         hp.verify_param_error = True
@@ -312,13 +312,13 @@ class TestHtHeatpumpTCP:
         # assert 0
 
     def test_send_request(self, cmdopt_url: str) -> None:
-        hp = HtHeatpump(url=cmdopt_url)
+        hp = HtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
         with pytest.raises(IOError):
             hp.send_request(r"LIN")
         # assert 0
 
     def test_read_response(self, cmdopt_url: str) -> None:
-        hp = HtHeatpump(url=cmdopt_url)
+        hp = HtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
         with pytest.raises(IOError):
             hp.read_response()
         # assert 0
@@ -380,7 +380,7 @@ class TestHtHeatpumpTCP:
     def test_set_date_time_raises_TypeError(
         self, cmdopt_url: str
     ) -> None:
-        hp = HtHeatpump(url=cmdopt_url)
+        hp = HtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
         with pytest.raises(TypeError):
             hp.set_date_time(123)  # type: ignore
         # assert 0
@@ -541,7 +541,7 @@ class TestHtHeatpumpTCP:
     def test_get_param_raises_KeyError(
         self, cmdopt_url: str
     ) -> None:
-        hp = HtHeatpump(url=cmdopt_url)
+        hp = HtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
         with pytest.raises(KeyError):
             hp.get_param("BlaBlaBla")
         # assert 0
@@ -561,7 +561,7 @@ class TestHtHeatpumpTCP:
     def test_set_param_raises_KeyError(
         self, cmdopt_url: str
     ) -> None:
-        hp = HtHeatpump(url=cmdopt_url)
+        hp = HtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
         with pytest.raises(KeyError):
             hp.set_param("BlaBlaBla", 123)
         # assert 0
@@ -577,7 +577,7 @@ class TestHtHeatpumpTCP:
     def test_set_param_raises_ValueError(
         self, cmdopt_url: str, name: str, param: HtParam
     ) -> None:
-        hp = HtHeatpump(url=cmdopt_url)
+        hp = HtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
         assert param.min_val is not None
         with pytest.raises(ValueError):
             hp.set_param(name, param.min_val - 1, ignore_limits=False)
@@ -671,7 +671,7 @@ class TestHtHeatpumpTCP:
     def test_fast_query_with_names_raises_KeyError(
         self, cmdopt_url: str
     ) -> None:
-        hp = HtHeatpump(url=cmdopt_url)
+        hp = HtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
         with pytest.raises(KeyError):
             hp.fast_query("BlaBlaBla")
         # assert 0
@@ -686,7 +686,7 @@ class TestHtHeatpumpTCP:
     def test_fast_query_with_names_raises_ValueError(
         self, cmdopt_url: str, names: List[str]
     ) -> None:
-        hp = HtHeatpump(url=cmdopt_url)
+        hp = HtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
         with pytest.raises(ValueError):
             hp.fast_query(*names)
         # assert 0
