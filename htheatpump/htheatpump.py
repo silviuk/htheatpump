@@ -286,13 +286,13 @@ class HtHeatpump:
 
     def __del__(self) -> None:
         # close the connection if still established
-        if self._ser_settings is not None:  # Check if serial was configured
-            if self._ser and self._ser.is_open:
+        if getattr(self, "_ser_settings", None) is not None:  # Check if serial was configured
+            if getattr(self, "_ser", None) and self._ser.is_open:
                 # close the serial connection
                 self._ser.close()
-        elif self._sock_settings is not None:  # Check if socket was configured
+        elif getattr(self, "_sock_settings", None) is not None:  # Check if socket was configured
             # close the socket connection
-            if self._sock:
+            if getattr(self, "_sock", None):
                 self._sock.close()
 
     def __enter__(self) -> HtHeatpump:

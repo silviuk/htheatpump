@@ -17,186 +17,24 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-""" Tests for code in `htheatpump.htheatpump`. """
+""" Tests for code in `htheatpump.htheatpump` using TCP socket connection. """
 
 import datetime
 import random
 import re
-from typing import Generator, List, Set
+from typing import AsyncGenerator, Generator, List, Set
 
 import pytest
+import pytest_asyncio
 
+from htheatpump.aiohtheatpump import AioHtHeatpump
 from htheatpump.htheatpump import HtHeatpump, VerifyAction
 from htheatpump.htparams import HtDataTypes, HtParam, HtParams
 from htheatpump.httimeprog import TimeProgEntry, TimeProgram
 
 
-@pytest.mark.parametrize(
-    "s, checksum",
-    [
-        (b"", 0x0),
-        (b"\x02\xfd\xd0\xe0\x00\x00\x05~LIN;", 0x4C),
-        (b"\x02\xfd\xd0\xe0\x00\x00\x06~LOUT;", 0x92),
-        (b"\x02\xfd\xe0\xd0\x00\x00\x06~OK;\r\n", 0x91),
-        (b"\x02\xfd\xd0\xe0\x00\x00\t~SP,NR=9;", 0xDC),
-    ],
-)
-def test_calc_checksum(s: bytes, checksum: int) -> None:
-    from htheatpump.protocol import calc_checksum  # pylint: disable=C0415
-
-    assert calc_checksum(s) == checksum
-    # assert 0
-
-
-@pytest.mark.parametrize("s", [b"", b"\x01"])
-def test_verify_checksum_raises_ValueError(s: bytes) -> None:
-    from htheatpump.protocol import verify_checksum  # pylint: disable=C0415
-
-    with pytest.raises(ValueError):
-        verify_checksum(s)
-    # assert 0
-
-
-@pytest.mark.parametrize(
-    "s, result",
-    [
-        (b"\x00\x00", True),
-        (b"\x02\xfd\xd0\xe0\x00\x00\x05~LIN;\x4c", True),
-        (b"\x02\xfd\xd0\xe0\x00\x00\x06~LOUT;\x92", True),
-        (b"\x02\xfd\xe0\xd0\x00\x00\x06~OK;\r\n\x91", True),
-        (b"\x02\xfd\xd0\xe0\x00\x00\t~SP,NR=9;\xdc", True),
-    ],
-)
-def test_verify_checksum(s: bytes, result: bool) -> None:
-    from htheatpump.protocol import verify_checksum  # pylint: disable=C0415
-
-    assert verify_checksum(s) == result
-    # assert 0
-
-
-@pytest.mark.parametrize("s", [b""])
-def test_add_checksum_raises_ValueError(s: bytes) -> None:
-    from htheatpump.protocol import add_checksum  # pylint: disable=C0415
-
-    with pytest.raises(ValueError):
-        add_checksum(s)
-    # assert 0
-
-
-@pytest.mark.parametrize(
-    "s, result",
-    [
-        (b"\x00", b"\x00\x00"),
-        (
-            b"\x02\xfd\xd0\xe0\x00\x00\x05~LIN;",
-            b"\x02\xfd\xd0\xe0\x00\x00\x05~LIN;\x4c",
-        ),
-        (
-            b"\x02\xfd\xd0\xe0\x00\x00\x06~LOUT;",
-            b"\x02\xfd\xd0\xe0\x00\x00\x06~LOUT;\x92",
-        ),
-        (
-            b"\x02\xfd\xe0\xd0\x00\x00\x06~OK;\r\n",
-            b"\x02\xfd\xe0\xd0\x00\x00\x06~OK;\r\n\x91",
-        ),
-        (
-            b"\x02\xfd\xd0\xe0\x00\x00\t~SP,NR=9;",
-            b"\x02\xfd\xd0\xe0\x00\x00\t~SP,NR=9;\xdc",
-        ),
-    ],
-)
-def test_add_checksum(s: bytes, result: bytes) -> None:
-    from htheatpump.protocol import add_checksum  # pylint: disable=C0415
-
-    assert add_checksum(s) == result
-    # assert 0
-
-
-@pytest.mark.parametrize("cmd", ["?" * 254])
-def test_create_request_raises_ValueError(cmd: str) -> None:
-    from htheatpump.protocol import create_request  # pylint: disable=C0415
-
-    with pytest.raises(ValueError):
-        create_request(cmd)
-    # assert 0
-
-
-@pytest.mark.parametrize(
-    "cmd, result",
-    [
-        ("", b"\x02\xfd\xd0\xe0\x00\x00\x02~;\x98"),
-        ("LIN", b"\x02\xfd\xd0\xe0\x00\x00\x05~LIN;\x4c"),
-        ("LOUT", b"\x02\xfd\xd0\xe0\x00\x00\x06~LOUT;\x92"),
-        ("SP,NR=9", b"\x02\xfd\xd0\xe0\x00\x00\t~SP,NR=9;\xdc"),
-    ],
-)
-def test_create_request(cmd: str, result: bytes) -> None:
-    from htheatpump.protocol import create_request  # pylint: disable=C0415
-
-    assert create_request(cmd) == result
-    # assert 0
-
-
-# TCP Socket Tests
-def test_HtHeatpump_tcp_init_valid_url() -> None:
-    """Test TCP initialization with valid URL."""
-    hp = HtHeatpump(url="tcp://192.168.1.100:9999")
-    assert hp._sock_settings is not None
-    assert hp._sock_settings["address"] == ("192.168.1.100", 9999)
-    assert hp._sock_settings["timeout"] == HtHeatpump.DEFAULT_TIMEOUT
-    assert hp._ser_settings is None
-
-
-def test_HtHeatpump_tcp_init_custom_timeout() -> None:
-    """Test TCP initialization with custom timeout."""
-    hp = HtHeatpump(url="tcp://localhost:8080", timeout=10)
-    assert hp._sock_settings["timeout"] == 10
-
-
-def test_HtHeatpump_tcp_init_invalid_scheme() -> None:
-    """Test that invalid URL scheme raises ValueError."""
-    with pytest.raises(ValueError, match="invalid scheme for url, must be 'tcp'"):
-        HtHeatpump(url="http://localhost:9999")
-
-
-def test_HtHeatpump_tcp_init_both_device_and_url() -> None:
-    """Test that providing both device and url raises ValueError."""
-    with pytest.raises(ValueError, match="Exactly one of 'device' or 'url' must be provided"):
-        HtHeatpump(device="/dev/ttyUSB0", url="tcp://localhost:9999")
-
-
-def test_HtHeatpump_tcp_init_neither_device_nor_url() -> None:
-    """Test that providing neither device nor url raises ValueError."""
-    with pytest.raises(ValueError, match="Exactly one of 'device' or 'url' must be provided"):
-        HtHeatpump()
-
-
-@pytest.mark.parametrize("url,expected_host,expected_port", [
-    ("tcp://localhost:9999", "localhost", 9999),
-    ("tcp://192.168.1.100:8080", "192.168.1.100", 8080),
-    ("tcp://example.com:1234", "example.com", 1234),
-])
-def test_HtHeatpump_tcp_url_parsing(url: str, expected_host: str, expected_port: int) -> None:
-    """Test parsing of valid TCP URLs."""
-    hp = HtHeatpump(url=url)
-    assert hp._sock_settings["address"] == (expected_host, expected_port)
-
-
 @pytest.mark.run_if_connected
-def test_HtHeatpump_init_del(cmdopt_device: str, cmdopt_baudrate: int) -> None:
-    hp = HtHeatpump(device=cmdopt_device, baudrate=cmdopt_baudrate)
-    assert not hp.is_open
-    hp.open_connection()
-    assert hp.is_open
-    del hp  # HtHeatpump.__del__ should be executed here!
-    # assert 0
-
-
-@pytest.mark.run_if_connected
-def test_HtHeatpump_tcp_init_del(cmdopt_url: str) -> None:
-    """Test TCP connection initialization and cleanup."""
-    if not cmdopt_url:
-        pytest.skip("No TCP URL provided")
+def test_HtHeatpump_init_del(cmdopt_url: str) -> None:
     hp = HtHeatpump(url=cmdopt_url)
     assert not hp.is_open
     hp.open_connection()
@@ -206,20 +44,7 @@ def test_HtHeatpump_tcp_init_del(cmdopt_url: str) -> None:
 
 
 @pytest.mark.run_if_connected
-def test_HtHeatpump_enter_exit(cmdopt_device: str, cmdopt_baudrate: int) -> None:
-    with HtHeatpump(device=cmdopt_device, baudrate=cmdopt_baudrate) as hp:
-        assert hp is not None
-        assert hp.is_open
-    assert hp is not None
-    assert not hp.is_open
-    # assert 0
-
-
-@pytest.mark.run_if_connected
-def test_HtHeatpump_tcp_enter_exit(cmdopt_url: str) -> None:
-    """Test TCP connection with context manager."""
-    if not cmdopt_url:
-        pytest.skip("No TCP URL provided")
+def test_HtHeatpump_enter_exit(cmdopt_url: str) -> None:
     with HtHeatpump(url=cmdopt_url) as hp:
         assert hp is not None
         assert hp.is_open
@@ -229,8 +54,8 @@ def test_HtHeatpump_tcp_enter_exit(cmdopt_url: str) -> None:
 
 
 @pytest.fixture(scope="class")
-def hthp(cmdopt_device: str, cmdopt_baudrate: int) -> Generator[HtHeatpump, None, None]:
-    ht_hp = HtHeatpump(device=cmdopt_device, baudrate=cmdopt_baudrate)
+def hthp_tcp(cmdopt_url: str) -> Generator[HtHeatpump, None, None]:
+    ht_hp = HtHeatpump(url=cmdopt_url)
     try:
         ht_hp.open_connection()
         yield ht_hp  # provide the heat pump instance
@@ -238,20 +63,216 @@ def hthp(cmdopt_device: str, cmdopt_baudrate: int) -> Generator[HtHeatpump, None
         ht_hp.close_connection()
 
 
-@pytest.fixture()
-def reconnect(hthp: HtHeatpump) -> Generator[None, None, None]:
-    hthp.reconnect()
-    hthp.login()
+@pytest_asyncio.fixture()
+async def reconnect_async(aiohthp_tcp: AioHtHeatpump) -> AsyncGenerator[None, None]:
+    await aiohthp_tcp.reconnect_async()
+    await aiohthp_tcp.login_async()
     yield
-    hthp.logout()
+    await aiohthp_tcp.logout_async()
 
 
-class TestHtHeatpump:
+class TestAioHtHeatpumpTCP:
     @pytest.mark.run_if_connected
-    def test_open_connection(self, hthp: HtHeatpump) -> None:
-        assert hthp.is_open
+    @pytest.mark.asyncio
+    async def test_open_connection(self, aiohthp_tcp: AioHtHeatpump) -> None:
+        assert aiohthp_tcp.is_open
         with pytest.raises(IOError):
-            hthp.open_connection()
+            aiohthp_tcp.open_connection()
+        # assert 0
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.asyncio
+    async def test_get_serial_number(self, aiohthp_tcp: AioHtHeatpump) -> None:
+        rid = await aiohthp_tcp.get_serial_number_async()
+        assert isinstance(rid, int), "'rid' must be of type int"
+        assert rid > 0
+        # assert 0
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.asyncio
+    async def test_get_version(self, aiohthp_tcp: AioHtHeatpump) -> None:
+        version = await aiohthp_tcp.get_version_async()
+        # ( "3.0.20", 2321 )
+        assert isinstance(version, tuple), "'version' must be of type tuple"
+        assert len(version) == 2
+        ver_str, ver_num = version
+        assert isinstance(ver_str, str), "'ver_str' must be of type str"
+        m = re.match(r"^(\d+).(\d+).(\d+)$", ver_str)
+        assert m is not None, "invalid version string [{!r}]".format(ver_str)
+        assert isinstance(ver_num, int), "'ver_num' must be of type int"
+        assert ver_num > 0
+        await aiohthp_tcp.send_request_async(r"SP,NR=9")
+        resp = await aiohthp_tcp.read_response_async()
+        m = re.match(r"^SP,NR=9,.*NAME=([^,]+).*VAL=([^,]+).*$", resp)
+        assert (
+            m is not None
+        ), "invalid response for query of the software version [{!r}]".format(resp)
+        assert ver_str == m.group(1).strip()
+        assert ver_num == int(m.group(2))
+        # assert 0
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.asyncio
+    async def test_get_date_time(self, aiohthp_tcp: AioHtHeatpump) -> None:
+        date_time = await aiohthp_tcp.get_date_time_async()
+        # (datetime.datetime(...), 2)  # 2 = Tuesday
+        assert isinstance(date_time, tuple), "'date_time' must be of type tuple"
+        assert len(date_time) == 2
+        dt, weekday = date_time
+        assert isinstance(dt, datetime.datetime), "'dt' must be of type datetime"
+        assert isinstance(weekday, int), "'weekday' must be of type int"
+        assert weekday in range(1, 8)
+        # assert 0
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.asyncio
+    async def test_set_date_time(self, aiohthp_tcp: AioHtHeatpump) -> None:
+        dt_before, _ = await aiohthp_tcp.get_date_time_async()
+        dt_set, _ = await aiohthp_tcp.set_date_time_async()
+        dt_after, _ = await aiohthp_tcp.get_date_time_async()
+        assert (dt_after - dt_before).total_seconds() > 0
+        assert (dt_after - dt_set).total_seconds() < 2
+        # assert 0
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.asyncio
+    async def test_get_fault_list(self, aiohthp_tcp: AioHtHeatpump) -> None:
+        fault_list = await aiohthp_tcp.get_fault_list_async()
+        assert isinstance(fault_list, list)
+        assert len(fault_list) == await aiohthp_tcp.get_fault_list_size_async()
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.parametrize("name, param", HtParams.items())
+    @pytest.mark.asyncio
+    async def test_get_param(
+        self, aiohthp_tcp: AioHtHeatpump, name: str, param: HtParam
+    ) -> None:
+        value = await aiohthp_tcp.get_param_async(name)
+        assert value is not None, "'value' must not be None"
+        assert param.in_limits(value)
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.parametrize("name, param", HtParams.items())
+    @pytest.mark.asyncio
+    async def test_set_param(
+        self, aiohthp_tcp: AioHtHeatpump, name: str, param: HtParam
+    ) -> None:
+        if param.is_writable:
+            val = await aiohthp_tcp.get_param_async(name)
+            if isinstance(val, (int, float)):
+                new_val = val + 1 if val + 1 < param.max_val else val - 1
+                await aiohthp_tcp.set_param_async(name, new_val)
+                assert await aiohthp_tcp.get_param_async(name) == new_val
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.asyncio
+    async def test_query(self, aiohthp_tcp: AioHtHeatpump) -> None:
+        values = await aiohthp_tcp.query_async()
+        assert isinstance(values, dict), "'values' must be of type dict"
+        assert len(values) == len(HtParams)
+        for name, value in values.items():
+            assert name in HtParams
+            assert value is not None
+            assert HtParams[name].in_limits(value)
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.asyncio
+    async def test_fast_query(self, aiohthp_tcp: AioHtHeatpump) -> None:
+        values = await aiohthp_tcp.fast_query_async()
+        assert isinstance(values, dict), "'values' must be of type dict"
+        assert len(values) == len(
+            [p for p in HtParams.values() if p.dp_type == "MP"]
+        )
+        for name, value in values.items():
+            assert name in HtParams
+            assert value is not None
+            assert HtParams[name].in_limits(value)
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.asyncio
+    async def test_get_time_progs(self, aiohthp_tcp: AioHtHeatpump) -> None:
+        time_progs = await aiohthp_tcp.get_time_progs_async()
+        assert isinstance(time_progs, List), "'time_progs' must be of type list"
+        assert len(time_progs) > 0
+        assert all([isinstance(time_prog, TimeProgram) for time_prog in time_progs])
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.parametrize("index", range(5))
+    @pytest.mark.asyncio
+    async def test_get_time_prog(self, aiohthp_tcp: AioHtHeatpump, index: int) -> None:
+        time_prog = await aiohthp_tcp.get_time_prog_async(index, with_entries=False)
+        assert isinstance(
+            time_prog, TimeProgram
+        ), "'time_prog' must be of type TimeProgram"
+        time_prog = await aiohthp_tcp.get_time_prog_async(index, with_entries=True)
+        assert isinstance(
+            time_prog, TimeProgram
+        ), "'time_prog' must be of type TimeProgram"
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.parametrize(
+        "index, day, num",
+        [
+            (index, day, num)
+            for index in range(5)
+            for day in range(7)
+            for num in range(7)
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_get_time_prog_entry(
+        self, aiohthp_tcp: AioHtHeatpump, index: int, day: int, num: int
+    ) -> None:
+        entry = await aiohthp_tcp.get_time_prog_entry_async(index, day, num)
+        assert isinstance(entry, TimeProgEntry), "'entry' must be of type TimeProgEntry"
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.asyncio
+    async def test_set_time_prog_entry(self, aiohthp_tcp: AioHtHeatpump) -> None:
+        entry = await aiohthp_tcp.get_time_prog_entry_async(0, 0, 0)
+        new_entry = TimeProgEntry(state=1 - entry.state, period=entry.period)
+        changed_entry = await aiohthp_tcp.set_time_prog_entry_async(0, 0, 0, new_entry)
+        assert changed_entry.state == new_entry.state
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.asyncio
+    async def test_set_time_prog(self, aiohthp_tcp: AioHtHeatpump) -> None:
+        time_prog = await aiohthp_tcp.get_time_prog_async(0)
+        entry = time_prog.entry(0, 0)
+        new_entry = TimeProgEntry(state=1 - entry.state, period=entry.period)
+        time_prog.set_entry(0, 0, new_entry)
+        changed_time_prog = await aiohthp_tcp.set_time_prog_async(time_prog)
+        assert changed_time_prog.entry(0, 0).state == new_entry.state
+
+
+@pytest.fixture()
+def reconnect(hthp_tcp: HtHeatpump) -> Generator[None, None, None]:
+    hthp_tcp.reconnect()
+    hthp_tcp.login()
+    yield
+    hthp_tcp.logout()
+
+
+class TestHtHeatpumpTCP:
+    @pytest.mark.run_if_connected
+    def test_open_connection(self, hthp_tcp: HtHeatpump) -> None:
+        assert hthp_tcp.is_open
+        with pytest.raises(IOError):
+            hthp_tcp.open_connection()
         # assert 0
 
     @pytest.mark.parametrize(
@@ -269,9 +290,9 @@ class TestHtHeatpump:
         ],
     )
     def test_verify_param_action(
-        self, cmdopt_device: str, cmdopt_baudrate: int, action: Set[VerifyAction]
+        self, cmdopt_url: str, action: Set[VerifyAction]
     ) -> None:
-        hp = HtHeatpump(device=cmdopt_device, baudrate=cmdopt_baudrate)
+        hp = HtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
         val = hp.verify_param_action
         assert isinstance(val, set)
         hp.verify_param_action = action
@@ -279,8 +300,8 @@ class TestHtHeatpump:
         hp.verify_param_action = val
         # assert 0
 
-    def test_verify_param_error(self, cmdopt_device: str, cmdopt_baudrate: int) -> None:
-        hp = HtHeatpump(device=cmdopt_device, baudrate=cmdopt_baudrate)
+    def test_verify_param_error(self, cmdopt_url: str) -> None:
+        hp = HtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
         val = hp.verify_param_error
         assert isinstance(val, bool)
         hp.verify_param_error = True
@@ -290,30 +311,30 @@ class TestHtHeatpump:
         hp.verify_param_error = val
         # assert 0
 
-    def test_send_request(self, cmdopt_device: str, cmdopt_baudrate: int) -> None:
-        hp = HtHeatpump(device=cmdopt_device, baudrate=cmdopt_baudrate)
+    def test_send_request(self, cmdopt_url: str) -> None:
+        hp = HtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
         with pytest.raises(IOError):
             hp.send_request(r"LIN")
         # assert 0
 
-    def test_read_response(self, cmdopt_device: str, cmdopt_baudrate: int) -> None:
-        hp = HtHeatpump(device=cmdopt_device, baudrate=cmdopt_baudrate)
+    def test_read_response(self, cmdopt_url: str) -> None:
+        hp = HtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
         with pytest.raises(IOError):
             hp.read_response()
         # assert 0
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
-    def test_get_serial_number(self, hthp: HtHeatpump) -> None:
-        rid = hthp.get_serial_number()
+    def test_get_serial_number(self, hthp_tcp: HtHeatpump) -> None:
+        rid = hthp_tcp.get_serial_number()
         assert isinstance(rid, int), "'rid' must be of type int"
         assert rid > 0
         # assert 0
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
-    def test_get_version(self, hthp: HtHeatpump) -> None:
-        version = hthp.get_version()
+    def test_get_version(self, hthp_tcp: HtHeatpump) -> None:
+        version = hthp_tcp.get_version()
         # ( "3.0.20", 2321 )
         assert isinstance(version, tuple), "'version' must be of type tuple"
         assert len(version) == 2
@@ -323,8 +344,8 @@ class TestHtHeatpump:
         assert m is not None, "invalid version string [{!r}]".format(ver_str)
         assert isinstance(ver_num, int), "'ver_num' must be of type int"
         assert ver_num > 0
-        hthp.send_request(r"SP,NR=9")
-        resp = hthp.read_response()
+        hthp_tcp.send_request(r"SP,NR=9")
+        resp = hthp_tcp.read_response()
         m = re.match(r"^SP,NR=9,.*NAME=([^,]+).*VAL=([^,]+).*$", resp)
         assert (
             m is not None
@@ -335,8 +356,8 @@ class TestHtHeatpump:
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
-    def test_get_date_time(self, hthp: HtHeatpump) -> None:
-        date_time = hthp.get_date_time()
+    def test_get_date_time(self, hthp_tcp: HtHeatpump) -> None:
+        date_time = hthp_tcp.get_date_time()
         # (datetime.datetime(...), 2)  # 2 = Tuesday
         assert isinstance(date_time, tuple), "'date_time' must be of type tuple"
         assert len(date_time) == 2
@@ -348,28 +369,32 @@ class TestHtHeatpump:
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
-    def test_set_date_time(self, hthp: HtHeatpump) -> None:
-        pass  # TODO
+    def test_set_date_time(self, hthp_tcp: HtHeatpump) -> None:
+        dt_before, _ = hthp_tcp.get_date_time()
+        dt_set, _ = hthp_tcp.set_date_time()
+        dt_after, _ = hthp_tcp.get_date_time()
+        assert (dt_after - dt_before).total_seconds() > 0
+        assert (dt_after - dt_set).total_seconds() < 2
         # assert 0
 
     def test_set_date_time_raises_TypeError(
-        self, cmdopt_device: str, cmdopt_baudrate: int
+        self, cmdopt_url: str
     ) -> None:
-        hp = HtHeatpump(device=cmdopt_device, baudrate=cmdopt_baudrate)
+        hp = HtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
         with pytest.raises(TypeError):
             hp.set_date_time(123)  # type: ignore
         # assert 0
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
-    def test_get_last_fault(self, hthp: HtHeatpump) -> None:
-        fault = hthp.get_last_fault()
+    def test_get_last_fault(self, hthp_tcp: HtHeatpump) -> None:
+        fault = hthp_tcp.get_last_fault()
         # (29, 20, datetime.datetime(...), "EQ_Spreizung")
         assert isinstance(fault, tuple), "'fault' must be of type tuple"
         assert len(fault) == 4
         index, error, dt, msg = fault
         assert isinstance(index, int), "'index' must be of type int"
-        assert 0 <= index < hthp.get_fault_list_size()
+        assert 0 <= index < hthp_tcp.get_fault_list_size()
         assert isinstance(error, int), "'error' must be of type int"
         assert error >= 0
         assert isinstance(dt, datetime.datetime), "'dt' must be of type datetime"
@@ -378,16 +403,16 @@ class TestHtHeatpump:
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
-    def test_get_fault_list_size(self, hthp: HtHeatpump) -> None:
-        size = hthp.get_fault_list_size()
+    def test_get_fault_list_size(self, hthp_tcp: HtHeatpump) -> None:
+        size = hthp_tcp.get_fault_list_size()
         assert isinstance(size, int), "'size' must be of type int"
         assert size >= 0
         # assert 0
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
-    def test_get_fault_list(self, hthp: HtHeatpump) -> None:
-        fault_list = hthp.get_fault_list()
+    def test_get_fault_list(self, hthp_tcp: HtHeatpump) -> None:
+        fault_list = hthp_tcp.get_fault_list()
         # [ { "index": 29,  # fault list index
         #     "error": 20,  # error code
         #     "datetime": datetime.datetime(...),  # date and time of the entry
@@ -396,12 +421,12 @@ class TestHtHeatpump:
         #   # ...
         #   ]
         assert isinstance(fault_list, list), "'fault_list' must be of type list"
-        assert len(fault_list) == hthp.get_fault_list_size()
+        assert len(fault_list) == hthp_tcp.get_fault_list_size()
         for entry in fault_list:
             assert isinstance(entry, dict), "'entry' must be of type dict"
             index = entry["index"]
             assert isinstance(index, int), "'index' must be of type int"
-            assert 0 <= index < hthp.get_fault_list_size()
+            assert 0 <= index < hthp_tcp.get_fault_list_size()
             error = entry["error"]
             assert isinstance(error, int), "'error' must be of type int"
             assert error >= 0
@@ -414,15 +439,15 @@ class TestHtHeatpump:
     # @pytest.mark.skip(reason="test needs a rework")
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
-    def test_get_fault_list_in_several_pieces(self, hthp: HtHeatpump) -> None:
+    def test_get_fault_list_in_several_pieces(self, hthp_tcp: HtHeatpump) -> None:
         args = []
         cmd = ""
-        fault_list_size = hthp.get_fault_list_size()
+        fault_list_size = hthp_tcp.get_fault_list_size()
         while len(cmd) < 255 * 2:  # request has do be done in 3 parts
             item = random.randint(0, fault_list_size - 1)
             cmd += ",{}".format(item)
             args.append(item)
-        fault_list = hthp.get_fault_list(*args)
+        fault_list = hthp_tcp.get_fault_list(*args)
         # [ { "index": 29,  # fault list index
         #     "error": 20,  # error code
         #     "datetime": datetime.datetime(...),  # date and time of the entry
@@ -448,19 +473,19 @@ class TestHtHeatpump:
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
-    def test_get_fault_list_with_index(self, hthp: HtHeatpump) -> None:
-        size = hthp.get_fault_list_size()
+    def test_get_fault_list_with_index(self, hthp_tcp: HtHeatpump) -> None:
+        size = hthp_tcp.get_fault_list_size()
         assert isinstance(size, int), "'size' must be of type int"
         assert size >= 0
         for i in range(size):
-            fault_list = hthp.get_fault_list(i)
+            fault_list = hthp_tcp.get_fault_list(i)
             assert isinstance(fault_list, list), "'fault_list' must be of type list"
             assert len(fault_list) == 1
             entry = fault_list[0]
             assert isinstance(entry, dict), "'entry' must be of type dict"
             index = entry["index"]
             assert isinstance(index, int), "'index' must be of type int"
-            assert 0 <= index < hthp.get_fault_list_size()
+            assert 0 <= index < hthp_tcp.get_fault_list_size()
             error = entry["error"]
             assert isinstance(error, int), "'error' must be of type int"
             assert error >= 0
@@ -472,27 +497,27 @@ class TestHtHeatpump:
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
-    def test_get_fault_list_with_index_raises_IOError(self, hthp: HtHeatpump) -> None:
+    def test_get_fault_list_with_index_raises_IOError(self, hthp_tcp: HtHeatpump) -> None:
         with pytest.raises(IOError):
-            hthp.get_fault_list(-1)
+            hthp_tcp.get_fault_list(-1)
         with pytest.raises(IOError):
-            hthp.get_fault_list(hthp.get_fault_list_size())
+            hthp_tcp.get_fault_list(hthp_tcp.get_fault_list_size())
         # assert 0
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
-    def test_get_fault_list_with_indices(self, hthp: HtHeatpump) -> None:
-        size = hthp.get_fault_list_size()
+    def test_get_fault_list_with_indices(self, hthp_tcp: HtHeatpump) -> None:
+        size = hthp_tcp.get_fault_list_size()
         for cnt in range(size + 1):
             indices = random.sample(range(size), cnt)
-            fault_list = hthp.get_fault_list(*indices)
+            fault_list = hthp_tcp.get_fault_list(*indices)
             assert isinstance(fault_list, list), "'fault_list' must be of type list"
             assert len(fault_list) == (cnt if cnt > 0 else size)
             for entry in fault_list:
                 assert isinstance(entry, dict), "'entry' must be of type dict"
                 index = entry["index"]
                 assert isinstance(index, int), "'index' must be of type int"
-                assert 0 <= index < hthp.get_fault_list_size()
+                assert 0 <= index < hthp_tcp.get_fault_list_size()
                 error = entry["error"]
                 assert isinstance(error, int), "'error' must be of type int"
                 assert error >= 0
@@ -507,16 +532,16 @@ class TestHtHeatpump:
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
     @pytest.mark.parametrize("name, param", HtParams.items())
-    def test_get_param(self, hthp: HtHeatpump, name: str, param: HtParam) -> None:
-        value = hthp.get_param(name)
+    def test_get_param(self, hthp_tcp: HtHeatpump, name: str, param: HtParam) -> None:
+        value = hthp_tcp.get_param(name)
         assert value is not None, "'value' must not be None"
         assert param.in_limits(value)
         # assert 0
 
     def test_get_param_raises_KeyError(
-        self, cmdopt_device: str, cmdopt_baudrate: int
+        self, cmdopt_url: str
     ) -> None:
-        hp = HtHeatpump(device=cmdopt_device, baudrate=cmdopt_baudrate)
+        hp = HtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
         with pytest.raises(KeyError):
             hp.get_param("BlaBlaBla")
         # assert 0
@@ -524,14 +549,19 @@ class TestHtHeatpump:
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
     @pytest.mark.parametrize("name, param", HtParams.items())
-    def test_set_param(self, hthp: HtHeatpump, name: str, param: HtParam) -> None:
-        pass  # TODO
+    def test_set_param(self, hthp_tcp: HtHeatpump, name: str, param: HtParam) -> None:
+        if param.is_writable:
+            val = hthp_tcp.get_param(name)
+            if isinstance(val, (int, float)):
+                new_val = val + 1 if val + 1 < param.max_val else val - 1
+                hthp_tcp.set_param(name, new_val)
+                assert hthp_tcp.get_param(name) == new_val
         # assert 0
 
     def test_set_param_raises_KeyError(
-        self, cmdopt_device: str, cmdopt_baudrate: int
+        self, cmdopt_url: str
     ) -> None:
-        hp = HtHeatpump(device=cmdopt_device, baudrate=cmdopt_baudrate)
+        hp = HtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
         with pytest.raises(KeyError):
             hp.set_param("BlaBlaBla", 123)
         # assert 0
@@ -545,30 +575,29 @@ class TestHtHeatpump:
         ],
     )
     def test_set_param_raises_ValueError(
-        self, cmdopt_device: str, cmdopt_baudrate: int, name: str, param: HtParam
+        self, cmdopt_url: str, name: str, param: HtParam
     ) -> None:
-        # hp = HtHeatpump(device=cmdopt_device, baudrate=cmdopt_baudrate)
-        # assert param.min_val is not None
-        # with pytest.raises(ValueError):
-        #    hp.set_param(name, param.min_val - 1, ignore_limits=False)
-        # assert param.max_val is not None
-        # with pytest.raises(ValueError):
-        #    hp.set_param(name, param.max_val + 1, ignore_limits=False)
-        pass  # TODO
+        hp = HtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
+        assert param.min_val is not None
+        with pytest.raises(ValueError):
+            hp.set_param(name, param.min_val - 1, ignore_limits=False)
+        assert param.max_val is not None
+        with pytest.raises(ValueError):
+            hp.set_param(name, param.max_val + 1, ignore_limits=False)
         # assert 0
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
-    def test_in_error(self, hthp: HtHeatpump) -> None:
-        in_error = hthp.in_error
+    def test_in_error(self, hthp_tcp: HtHeatpump) -> None:
+        in_error = hthp_tcp.in_error
         assert isinstance(in_error, bool), "'in_error' must be of type bool"
-        assert in_error == hthp.get_param("Stoerung")
+        assert in_error == hthp_tcp.get_param("Stoerung")
         # assert 0
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
-    def test_query(self, hthp: HtHeatpump) -> None:
-        values = hthp.query()
+    def test_query(self, hthp_tcp: HtHeatpump) -> None:
+        values = hthp_tcp.query()
         # { "HKR Soll_Raum": 21.0,
         #   "Stoerung": False,
         #   "Temp. Aussen": 8.8,
@@ -591,8 +620,8 @@ class TestHtHeatpump:
             for cnt in range(len(HtParams) + 1)
         ],
     )
-    def test_query_with_names(self, hthp: HtHeatpump, names: List[str]) -> None:
-        values = hthp.query(*names)
+    def test_query_with_names(self, hthp_tcp: HtHeatpump, names: List[str]) -> None:
+        values = hthp_tcp.query(*names)
         # { "HKR Soll_Raum": 21.0,
         #   "Stoerung": False,
         #   "Temp. Aussen": 8.8,
@@ -609,8 +638,8 @@ class TestHtHeatpump:
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
-    def test_fast_query(self, hthp: HtHeatpump) -> None:
-        values = hthp.fast_query()
+    def test_fast_query(self, hthp_tcp: HtHeatpump) -> None:
+        values = hthp_tcp.fast_query()
         assert isinstance(values, dict), "'values' must be of type dict"
         assert len(values) == len(HtParams.of_type("MP"))
         for name, value in values.items():
@@ -628,8 +657,8 @@ class TestHtHeatpump:
             for cnt in range(len(HtParams.of_type("MP")) + 1)
         ],
     )
-    def test_fast_query_with_names(self, hthp: HtHeatpump, names: List[str]) -> None:
-        values = hthp.fast_query(*names)
+    def test_fast_query_with_names(self, hthp_tcp: HtHeatpump, names: List[str]) -> None:
+        values = hthp_tcp.fast_query(*names)
         assert isinstance(values, dict), "'values' must be of type dict"
         assert not names or len(values) == len(set(names))
         for name, value in values.items():
@@ -640,9 +669,9 @@ class TestHtHeatpump:
         # assert 0
 
     def test_fast_query_with_names_raises_KeyError(
-        self, cmdopt_device: str, cmdopt_baudrate: int
+        self, cmdopt_url: str
     ) -> None:
-        hp = HtHeatpump(device=cmdopt_device, baudrate=cmdopt_baudrate)
+        hp = HtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
         with pytest.raises(KeyError):
             hp.fast_query("BlaBlaBla")
         # assert 0
@@ -655,9 +684,9 @@ class TestHtHeatpump:
         ],
     )
     def test_fast_query_with_names_raises_ValueError(
-        self, cmdopt_device: str, cmdopt_baudrate: int, names: List[str]
+        self, cmdopt_url: str, names: List[str]
     ) -> None:
-        hp = HtHeatpump(device=cmdopt_device, baudrate=cmdopt_baudrate)
+        hp = HtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
         with pytest.raises(ValueError):
             hp.fast_query(*names)
         # assert 0
@@ -665,7 +694,7 @@ class TestHtHeatpump:
     # @pytest.mark.skip(reason="test needs a rework")
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
-    def test_fast_query_in_several_pieces(self, hthp: HtHeatpump) -> None:
+    def test_fast_query_in_several_pieces(self, hthp_tcp: HtHeatpump) -> None:
         args = []
         cmd = ""
         mp_data_points = [
@@ -675,7 +704,7 @@ class TestHtHeatpump:
             name, param = random.choice(mp_data_points)
             cmd += ",{}".format(param.dp_number)
             args.append(name)
-        values = hthp.fast_query(*args)
+        values = hthp_tcp.fast_query(*args)
         assert isinstance(values, dict), "'values' must be of type dict"
         assert not args or len(values) == len(set(args))
         for name, value in values.items():
@@ -687,8 +716,8 @@ class TestHtHeatpump:
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
-    def test_get_time_progs(self, hthp: HtHeatpump) -> None:
-        time_progs = hthp.get_time_progs()
+    def test_get_time_progs(self, hthp_tcp: HtHeatpump) -> None:
+        time_progs = hthp_tcp.get_time_progs()
         assert isinstance(time_progs, List), "'time_progs' must be of type list"
         assert len(time_progs) > 0
         assert all([isinstance(time_prog, TimeProgram) for time_prog in time_progs])
@@ -698,13 +727,13 @@ class TestHtHeatpump:
     @pytest.mark.usefixtures("reconnect")
     @pytest.mark.parametrize(
         "index", range(5)
-    )  # TODO range(5) -> range(len(hthp.get_time_progs()))
-    def test_get_time_prog(self, hthp: HtHeatpump, index: int) -> None:
-        time_prog = hthp.get_time_prog(index, with_entries=False)
+    )  # TODO range(5) -> range(len(hthp_tcp.get_time_progs()))
+    def test_get_time_prog(self, hthp_tcp: HtHeatpump, index: int) -> None:
+        time_prog = hthp_tcp.get_time_prog(index, with_entries=False)
         assert isinstance(
             time_prog, TimeProgram
         ), "'time_prog' must be of type TimeProgram"
-        time_prog = hthp.get_time_prog(index, with_entries=True)
+        time_prog = hthp_tcp.get_time_prog(index, with_entries=True)
         assert isinstance(
             time_prog, TimeProgram
         ), "'time_prog' must be of type TimeProgram"
@@ -713,11 +742,11 @@ class TestHtHeatpump:
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
     @pytest.mark.parametrize("index", [-1, 5])
-    def test_get_time_prog_raises_IOError(self, hthp: HtHeatpump, index: int) -> None:
+    def test_get_time_prog_raises_IOError(self, hthp_tcp: HtHeatpump, index: int) -> None:
         with pytest.raises(IOError):
-            hthp.get_time_prog(index, with_entries=False)
+            hthp_tcp.get_time_prog(index, with_entries=False)
         with pytest.raises(IOError):
-            hthp.get_time_prog(index, with_entries=True)
+            hthp_tcp.get_time_prog(index, with_entries=True)
         # assert 0
 
     @pytest.mark.run_if_connected
@@ -732,9 +761,9 @@ class TestHtHeatpump:
         ],
     )
     def test_get_time_prog_entry(
-        self, hthp: HtHeatpump, index: int, day: int, num: int
+        self, hthp_tcp: HtHeatpump, index: int, day: int, num: int
     ) -> None:
-        entry = hthp.get_time_prog_entry(index, day, num)
+        entry = hthp_tcp.get_time_prog_entry(index, day, num)
         assert isinstance(entry, TimeProgEntry), "'entry' must be of type TimeProgEntry"
         # assert 0
 
@@ -749,20 +778,46 @@ class TestHtHeatpump:
         ],
     )
     def test_get_time_prog_entry_raises_IOError(
-        self, hthp: HtHeatpump, index: int, day: int, num: int
+        self, hthp_tcp: HtHeatpump, index: int, day: int, num: int
     ) -> None:
         with pytest.raises(IOError):
-            hthp.get_time_prog_entry(index, day, num)
+            hthp_tcp.get_time_prog_entry(index, day, num)
         # assert 0
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
-    def test_set_time_prog_entry(self, hthp: HtHeatpump) -> None:
-        pass  # TODO
+    def test_set_time_prog_entry(self, hthp_tcp: HtHeatpump) -> None:
+        entry = hthp_tcp.get_time_prog_entry(0, 0, 0)
+        new_entry = TimeProgEntry(
+            state=1 - entry.state,
+            period=entry.period
+        )
+        changed_entry = hthp_tcp.set_time_prog_entry(0, 0, 0, new_entry)
+        assert changed_entry.state == new_entry.state
         # assert 0
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
-    def test_set_time_prog(self, hthp: HtHeatpump) -> None:
-        pass  # TODO
+    def test_set_time_prog(self, hthp_tcp: HtHeatpump) -> None:
+        time_prog = hthp_tcp.get_time_prog(0)
+        entry = time_prog.entry(0, 0)
+        new_entry = TimeProgEntry(
+            state=1 - entry.state,
+            period=entry.period
+        )
+        time_prog.set_entry(0, 0, new_entry)
+        changed_time_prog = hthp_tcp.set_time_prog(time_prog)
+        assert changed_time_prog.entry(0, 0).state == new_entry.state
         # assert 0
+
+
+@pytest.fixture(scope="class")
+def aiohthp_tcp(
+    cmdopt_url: str,
+) -> Generator[AioHtHeatpump, None, None]:
+    ht_hp = AioHtHeatpump(url=cmdopt_url)
+    try:
+        ht_hp.open_connection()
+        yield ht_hp  # provide the heat pump instance
+    finally:
+        ht_hp.close_connection()
