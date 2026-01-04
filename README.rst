@@ -104,8 +104,11 @@ The following examples assume a serial connection, with equivalent code TCP conn
 
     from htheatpump import HtHeatpump
 
+    # Serial connection
     hp = HtHeatpump("/dev/ttyUSB0", baudrate=9600)
-    # hp = HtHeatpump(url="tcp://192.168.1.2:9999")  # for TCP connection
+    # or serial-over-TCP connection
+    hp = HtHeatpump(url="tcp://192.168.1.100:9999")
+    
     try:
         hp.open_connection()
         hp.login()
@@ -121,8 +124,11 @@ The following examples assume a serial connection, with equivalent code TCP conn
 
     from htheatpump import AioHtHeatpump
 
+    # Serial connection
     hp = AioHtHeatpump("/dev/ttyUSB0", baudrate=9600)
-    # hp = AioHtHeatpump(url="tcp://192.168.1.2:9999")  # for TCP connection
+    # or TCP connection
+    hp = AioHtHeatpump(url="tcp://192.168.1.100:9999")
+    
     try:
         hp.open_connection()
         await hp.login_async()
@@ -144,6 +150,10 @@ can be run immediately after installation, e.g.:
 
     $ htquery --device /dev/ttyUSB1 "Temp. Aussen" "Stoerung"
     # $ htquery --url "tcp://192.168.1.2:9999" "Temp. Aussen" "Stoerung" # for TCP connection
+    Stoerung    : False
+    Temp. Aussen: 5.0
+
+    $ htquery --url "tcp://192.168.1.100:9999" "Temp. Aussen" "Stoerung"
     Stoerung    : False
     Temp. Aussen: 5.0
 
