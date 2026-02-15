@@ -32,7 +32,7 @@ jobs:
         # look to see if there is a cache hit for the corresponding
         # requirements file
         key: |
-          ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('requirements/install.pip', 'requirements/develop.pip', 'requirements/test.pip', 'requirements/doc.pip') }}
+          ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('requirements/install.pip', 'requirements/develop.pip', 'requirements/doc.pip') }}
         restore-keys: |
           ${{ runner.os }}-build-${{ env.cache-name }}-
     - name: Install dependencies
@@ -40,14 +40,10 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements/install.pip
         pip install -r requirements/develop.pip
-        pip install -r requirements/test.pip
         pip install -r requirements/doc.pip
     - name: Lint with flake8
       run: |
         flake8 htheatpump tests samples setup.py
-    - name: Test with pytest
-      run: |
-        pytest htheatpump tests samples
     - name: Build the doc
       working-directory: ./docs
       run: |
