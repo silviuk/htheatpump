@@ -359,10 +359,10 @@ class TestAioHtHeatpumpTCP:
     async def test_set_param(
         self, aiohthp_tcp: AioHtHeatpump, name: str, param: HtParam
     ) -> None:
-        if param.is_writable:
+        if param.is_writable:  # type: ignore
             val = await aiohthp_tcp.get_param_async(name)
             if isinstance(val, (int, float)):
-                new_val = val + 1 if val + 1 < param.max_val else val - 1
+                new_val = val + 1 if val + 1 < param.max_val else val - 1  # type: ignore
                 await aiohthp_tcp.set_param_async(name, new_val)
                 assert await aiohthp_tcp.get_param_async(name) == new_val
 
@@ -618,10 +618,10 @@ class TestAioHtHeatpumpTCP:
     async def test_set_time_prog(self, aiohthp_tcp: AioHtHeatpump) -> None:
         time_prog = await aiohthp_tcp.get_time_prog_async(0)
         entry = time_prog.entry(0, 0)
-        new_entry = TimeProgEntry(state=1 - entry.state, period=entry.period)
+        new_entry = TimeProgEntry(state=1 - entry.state, period=entry.period)  # type: ignore
         time_prog.set_entry(0, 0, new_entry)
         changed_time_prog = await aiohthp_tcp.set_time_prog_async(time_prog)
-        assert changed_time_prog.entry(0, 0).state == new_entry.state
+        assert changed_time_prog.entry(0, 0).state == new_entry.state  # type: ignore
 
 
 @pytest.fixture()
@@ -915,10 +915,10 @@ class TestHtHeatpumpTCP:
     @pytest.mark.usefixtures("reconnect")
     @pytest.mark.parametrize("name, param", HtParams.items())
     def test_set_param(self, hthp_tcp: HtHeatpump, name: str, param: HtParam) -> None:
-        if param.is_writable:
+        if param.is_writable:  # type: ignore
             val = hthp_tcp.get_param(name)
             if isinstance(val, (int, float)):
-                new_val = val + 1 if val + 1 < param.max_val else val - 1
+                new_val = val + 1 if val + 1 < param.max_val else val - 1  # type: ignore
                 hthp_tcp.set_param(name, new_val)
                 assert hthp_tcp.get_param(name) == new_val
         # assert 0
@@ -1167,12 +1167,12 @@ class TestHtHeatpumpTCP:
         time_prog = hthp_tcp.get_time_prog(0)
         entry = time_prog.entry(0, 0)
         new_entry = TimeProgEntry(
-            state=1 - entry.state,
-            period=entry.period
+            state=1 - entry.state,  # type: ignore
+            period=entry.period  # type: ignore
         )
         time_prog.set_entry(0, 0, new_entry)
         changed_time_prog = hthp_tcp.set_time_prog(time_prog)
-        assert changed_time_prog.entry(0, 0).state == new_entry.state
+        assert changed_time_prog.entry(0, 0).state == new_entry.state  # type: ignore
         # assert 0
 
 
