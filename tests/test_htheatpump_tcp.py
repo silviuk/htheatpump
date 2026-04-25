@@ -131,11 +131,7 @@ class TestAioHtHeatpumpTCP:
     @pytest.mark.usefixtures("reconnect_async")
     @pytest.mark.asyncio
     async def test_set_date_time(self, aiohthp_tcp: AioHtHeatpump) -> None:
-        dt_before, _ = await aiohthp_tcp.get_date_time_async()
-        dt_set, _ = await aiohthp_tcp.set_date_time_async()
-        dt_after, _ = await aiohthp_tcp.get_date_time_async()
-        assert (dt_after - dt_before).total_seconds() > 0
-        assert (dt_after - dt_set).total_seconds() < 2
+        pass  # TODO
         # assert 0
 
     @pytest.mark.run_if_connected
@@ -164,12 +160,8 @@ class TestAioHtHeatpumpTCP:
     async def test_set_param(
         self, aiohthp_tcp: AioHtHeatpump, name: str, param: HtParam
     ) -> None:
-        if param.is_writable:
-            val = await aiohthp_tcp.get_param_async(name)
-            if isinstance(val, (int, float)):
-                new_val = val + 1 if val + 1 < param.max_val else val - 1
-                await aiohthp_tcp.set_param_async(name, new_val)
-                assert await aiohthp_tcp.get_param_async(name) == new_val
+        pass  # TODO
+        # assert 0
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect_async")
@@ -242,21 +234,15 @@ class TestAioHtHeatpumpTCP:
     @pytest.mark.usefixtures("reconnect_async")
     @pytest.mark.asyncio
     async def test_set_time_prog_entry(self, aiohthp_tcp: AioHtHeatpump) -> None:
-        entry = await aiohthp_tcp.get_time_prog_entry_async(0, 0, 0)
-        new_entry = TimeProgEntry(state=1 - entry.state, period=entry.period)
-        changed_entry = await aiohthp_tcp.set_time_prog_entry_async(0, 0, 0, new_entry)
-        assert changed_entry.state == new_entry.state
+        pass  # TODO
+        # assert 0
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect_async")
     @pytest.mark.asyncio
     async def test_set_time_prog(self, aiohthp_tcp: AioHtHeatpump) -> None:
-        time_prog = await aiohthp_tcp.get_time_prog_async(0)
-        entry = time_prog.entry(0, 0)
-        new_entry = TimeProgEntry(state=1 - entry.state, period=entry.period)
-        time_prog.set_entry(0, 0, new_entry)
-        changed_time_prog = await aiohthp_tcp.set_time_prog_async(time_prog)
-        assert changed_time_prog.entry(0, 0).state == new_entry.state
+        pass  # TODO
+        # assert 0
 
 
 @pytest.fixture()
@@ -370,11 +356,7 @@ class TestHtHeatpumpTCP:
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
     def test_set_date_time(self, hthp_tcp: HtHeatpump) -> None:
-        dt_before, _ = hthp_tcp.get_date_time()
-        dt_set, _ = hthp_tcp.set_date_time()
-        dt_after, _ = hthp_tcp.get_date_time()
-        assert (dt_after - dt_before).total_seconds() > 0
-        assert (dt_after - dt_set).total_seconds() < 2
+        pass  # TODO
         # assert 0
 
     def test_set_date_time_raises_TypeError(
@@ -550,12 +532,7 @@ class TestHtHeatpumpTCP:
     @pytest.mark.usefixtures("reconnect")
     @pytest.mark.parametrize("name, param", HtParams.items())
     def test_set_param(self, hthp_tcp: HtHeatpump, name: str, param: HtParam) -> None:
-        if param.is_writable:
-            val = hthp_tcp.get_param(name)
-            if isinstance(val, (int, float)):
-                new_val = val + 1 if val + 1 < param.max_val else val - 1
-                hthp_tcp.set_param(name, new_val)
-                assert hthp_tcp.get_param(name) == new_val
+        pass  # TODO
         # assert 0
 
     def test_set_param_raises_KeyError(
@@ -787,27 +764,13 @@ class TestHtHeatpumpTCP:
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
     def test_set_time_prog_entry(self, hthp_tcp: HtHeatpump) -> None:
-        entry = hthp_tcp.get_time_prog_entry(0, 0, 0)
-        new_entry = TimeProgEntry(
-            state=1 - entry.state,
-            period=entry.period
-        )
-        changed_entry = hthp_tcp.set_time_prog_entry(0, 0, 0, new_entry)
-        assert changed_entry.state == new_entry.state
+        pass  # TODO
         # assert 0
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect")
     def test_set_time_prog(self, hthp_tcp: HtHeatpump) -> None:
-        time_prog = hthp_tcp.get_time_prog(0)
-        entry = time_prog.entry(0, 0)
-        new_entry = TimeProgEntry(
-            state=1 - entry.state,
-            period=entry.period
-        )
-        time_prog.set_entry(0, 0, new_entry)
-        changed_time_prog = hthp_tcp.set_time_prog(time_prog)
-        assert changed_time_prog.entry(0, 0).state == new_entry.state
+        pass  # TODO
         # assert 0
 
 

@@ -150,6 +150,7 @@ def test_HtHeatpump_tcp_init_valid_url() -> None:
 def test_HtHeatpump_tcp_init_custom_timeout() -> None:
     """Test TCP initialization with custom timeout."""
     hp = HtHeatpump(url="tcp://localhost:8080", timeout=10)
+    assert hp._sock_settings is not None
     assert hp._sock_settings["timeout"] == 10
 
 
@@ -179,6 +180,7 @@ def test_HtHeatpump_tcp_init_neither_device_nor_url() -> None:
 def test_HtHeatpump_tcp_url_parsing(url: str, expected_host: str, expected_port: int) -> None:
     """Test parsing of valid TCP URLs."""
     hp = HtHeatpump(url=url)
+    assert hp._sock_settings is not None
     assert hp._sock_settings["address"] == (expected_host, expected_port)
 
 
