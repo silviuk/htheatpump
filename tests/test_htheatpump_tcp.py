@@ -390,10 +390,10 @@ class TestAioHtHeatpumpTCP:
         hp = AioHtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
         assert param.min_val is not None
         with pytest.raises(ValueError):
-           await hp.set_param_async(name, param.min_val - 1, ignore_limits=False)
+            await hp.set_param_async(name, param.min_val - 1, ignore_limits=False)
         assert param.max_val is not None
         with pytest.raises(ValueError):
-           await hp.set_param_async(name, param.max_val + 1, ignore_limits=False)
+            await hp.set_param_async(name, param.max_val + 1, ignore_limits=False)
         # assert 0
 
     @pytest.mark.run_if_connected
