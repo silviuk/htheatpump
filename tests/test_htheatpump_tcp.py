@@ -80,6 +80,58 @@ class TestAioHtHeatpumpTCP:
             aiohthp_tcp.open_connection()
         # assert 0
 
+    @pytest.mark.parametrize(
+        "action",
+        [
+            VerifyAction.NONE(),
+            {VerifyAction.NAME},
+            {VerifyAction.NAME, VerifyAction.MIN},
+            {VerifyAction.NAME, VerifyAction.MIN, VerifyAction.MAX},
+            {VerifyAction.NAME, VerifyAction.MIN, VerifyAction.MAX, VerifyAction.VALUE},
+            {VerifyAction.MIN, VerifyAction.MAX, VerifyAction.VALUE},
+            {VerifyAction.MAX, VerifyAction.VALUE},
+            {VerifyAction.VALUE},
+            VerifyAction.ALL(),
+        ],
+    )
+    def test_verify_param_action(
+        self, cmdopt_url: str, action: Set[VerifyAction]
+    ) -> None:
+        hp = AioHtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
+        val = hp.verify_param_action
+        assert isinstance(val, set)
+        hp.verify_param_action = action
+        assert hp.verify_param_action == action
+        hp.verify_param_action = val
+        # assert 0
+
+    def test_verify_param_error(self, cmdopt_url: str) -> None:
+        hp = AioHtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
+        val = hp.verify_param_error
+        assert isinstance(val, bool)
+        hp.verify_param_error = True
+        assert hp.verify_param_error is True
+        hp.verify_param_error = False
+        assert hp.verify_param_error is False
+        hp.verify_param_error = val
+        # assert 0
+
+    @pytest.mark.asyncio
+    async def test_send_request(self, cmdopt_url: str) -> None:
+        hp = AioHtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
+        with pytest.raises(IOError):
+            await hp.send_request_async(r"LIN")
+        # assert 0
+
+    @pytest.mark.asyncio
+    async def test_read_response(
+        self, cmdopt_url: str
+    ) -> None:
+        hp = AioHtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
+        with pytest.raises(IOError):
+            await hp.read_response_async()
+        # assert 0
+
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect_async")
     @pytest.mark.asyncio
@@ -138,6 +190,41 @@ class TestAioHtHeatpumpTCP:
         assert (dt_after - dt_set).total_seconds() < 2
         # assert 0
 
+    @pytest.mark.asyncio
+    async def test_set_date_time_raises_TypeError(
+        self, cmdopt_url: str
+    ) -> None:
+        hp = AioHtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
+        with pytest.raises(TypeError):
+            await hp.set_date_time_async(123)  # type: ignore
+        # assert 0
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.asyncio
+    async def test_get_last_fault(self, aiohthp_tcp: AioHtHeatpump) -> None:
+        fault = await aiohthp_tcp.get_last_fault_async()
+        # (29, 20, datetime.datetime(...), "EQ_Spreizung")
+        assert isinstance(fault, tuple), "'fault' must be of type tuple"
+        assert len(fault) == 4
+        index, error, dt, msg = fault
+        assert isinstance(index, int), "'index' must be of type int"
+        assert 0 <= index < await aiohthp_tcp.get_fault_list_size_async()
+        assert isinstance(error, int), "'error' must be of type int"
+        assert error >= 0
+        assert isinstance(dt, datetime.datetime), "'dt' must be of type datetime"
+        assert isinstance(msg, str), "'msg' must be of type str"
+        # assert 0
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.asyncio
+    async def test_get_fault_list_size(self, aiohthp_tcp: AioHtHeatpump) -> None:
+        size = await aiohthp_tcp.get_fault_list_size_async()
+        assert isinstance(size, int), "'size' must be of type int"
+        assert size >= 0
+        # assert 0
+
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect_async")
     @pytest.mark.asyncio
@@ -145,6 +232,105 @@ class TestAioHtHeatpumpTCP:
         fault_list = await aiohthp_tcp.get_fault_list_async()
         assert isinstance(fault_list, list)
         assert len(fault_list) == await aiohthp_tcp.get_fault_list_size_async()
+
+    # @pytest.mark.skip(reason="test needs a rework")
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.asyncio
+    async def test_get_fault_list_in_several_pieces(self, aiohthp_tcp: AioHtHeatpump) -> None:
+        args = []
+        cmd = ""
+        fault_list_size = await aiohthp_tcp.get_fault_list_size_async()
+        while len(cmd) < 255 * 2:  # request has do be done in 3 parts
+            item = random.randint(0, fault_list_size - 1)
+            cmd += ",{}".format(item)
+            args.append(item)
+        fault_list = await aiohthp_tcp.get_fault_list_async(*args)
+        # [ { "index": 29,  # fault list index
+        #     "error": 20,  # error code
+        #     "datetime": datetime.datetime(...),  # date and time of the entry
+        #     "message": "EQ_Spreizung",  # error message
+        #     },
+        #   # ...
+        #   ]
+        assert isinstance(fault_list, list), "'fault_list' must be of type list"
+        assert len(fault_list) == len(args)
+        for entry in fault_list:
+            assert isinstance(entry, dict), "'entry' must be of type dict"
+            index = entry["index"]
+            assert isinstance(index, int), "'index' must be of type int"
+            assert 0 <= index < fault_list_size
+            error = entry["error"]
+            assert isinstance(error, int), "'error' must be of type int"
+            assert error >= 0
+            dt = entry["datetime"]
+            assert isinstance(dt, datetime.datetime), "'dt' must be of type datetime"
+            msg = entry["message"]
+            assert isinstance(msg, str), "'msg' must be of type str"
+        # assert 0
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.asyncio
+    async def test_get_fault_list_with_index(self, aiohthp_tcp: AioHtHeatpump) -> None:
+        size = await aiohthp_tcp.get_fault_list_size_async()
+        assert isinstance(size, int), "'size' must be of type int"
+        assert size >= 0
+        for i in range(size):
+            fault_list = await aiohthp_tcp.get_fault_list_async(i)
+            assert isinstance(fault_list, list), "'fault_list' must be of type list"
+            assert len(fault_list) == 1
+            entry = fault_list[0]
+            assert isinstance(entry, dict), "'entry' must be of type dict"
+            index = entry["index"]
+            assert isinstance(index, int), "'index' must be of type int"
+            assert 0 <= index < await aiohthp_tcp.get_fault_list_size_async()
+            error = entry["error"]
+            assert isinstance(error, int), "'error' must be of type int"
+            assert error >= 0
+            dt = entry["datetime"]
+            assert isinstance(dt, datetime.datetime), "'dt' must be of type datetime"
+            msg = entry["message"]
+            assert isinstance(msg, str), "'msg' must be of type str"
+        # assert 0
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.asyncio
+    async def test_get_fault_list_with_index_raises_IOError(
+        self, aiohthp_tcp: AioHtHeatpump
+    ) -> None:
+        with pytest.raises(IOError):
+            await aiohthp_tcp.get_fault_list_async(-1)
+        with pytest.raises(IOError):
+            await aiohthp_tcp.get_fault_list_async(await aiohthp_tcp.get_fault_list_size_async())
+        # assert 0
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.asyncio
+    async def test_get_fault_list_with_indices(self, aiohthp_tcp: AioHtHeatpump) -> None:
+        size = await aiohthp_tcp.get_fault_list_size_async()
+        for cnt in range(size + 1):
+            indices = random.sample(range(size), cnt)
+            fault_list = await aiohthp_tcp.get_fault_list_async(*indices)
+            assert isinstance(fault_list, list), "'fault_list' must be of type list"
+            assert len(fault_list) == (cnt if cnt > 0 else size)
+            for entry in fault_list:
+                assert isinstance(entry, dict), "'entry' must be of type dict"
+                index = entry["index"]
+                assert isinstance(index, int), "'index' must be of type int"
+                assert 0 <= index < await aiohthp_tcp.get_fault_list_size_async()
+                error = entry["error"]
+                assert isinstance(error, int), "'error' must be of type int"
+                assert error >= 0
+                dt = entry["datetime"]
+                assert isinstance(
+                    dt, datetime.datetime
+                ), "'dt' must be of type datetime"
+                msg = entry["message"]
+                assert isinstance(msg, str), "'msg' must be of type str"
+        # assert 0
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect_async")
@@ -156,6 +342,15 @@ class TestAioHtHeatpumpTCP:
         value = await aiohthp_tcp.get_param_async(name)
         assert value is not None, "'value' must not be None"
         assert param.in_limits(value)
+
+    @pytest.mark.asyncio
+    async def test_get_param_raises_KeyError(
+        self, cmdopt_url: str
+    ) -> None:
+        hp = AioHtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
+        with pytest.raises(KeyError):
+            await hp.get_param_async("BlaBlaBla")
+        # assert 0
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect_async")
@@ -171,6 +366,45 @@ class TestAioHtHeatpumpTCP:
                 await aiohthp_tcp.set_param_async(name, new_val)
                 assert await aiohthp_tcp.get_param_async(name) == new_val
 
+    @pytest.mark.asyncio
+    async def test_set_param_raises_KeyError(
+        self, cmdopt_url: str
+    ) -> None:
+        hp = AioHtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
+        with pytest.raises(KeyError):
+            await hp.set_param_async("BlaBlaBla", 123)
+        # assert 0
+
+    @pytest.mark.parametrize(
+        "name, param",
+        [
+            (name, param)
+            for name, param in HtParams.items()
+            if param.data_type in (HtDataTypes.INT, HtDataTypes.FLOAT)
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_set_param_raises_ValueError(
+        self, cmdopt_url: str, name: str, param: HtParam
+    ) -> None:
+        hp = AioHtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
+        assert param.min_val is not None
+        with pytest.raises(ValueError):
+           await hp.set_param_async(name, param.min_val - 1, ignore_limits=False)
+        assert param.max_val is not None
+        with pytest.raises(ValueError):
+           await hp.set_param_async(name, param.max_val + 1, ignore_limits=False)
+        # assert 0
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.asyncio
+    async def test_in_error(self, aiohthp_tcp: AioHtHeatpump) -> None:
+        in_error = await aiohthp_tcp.in_error_async
+        assert isinstance(in_error, bool), "'in_error' must be of type bool"
+        assert in_error == await aiohthp_tcp.get_param_async("Stoerung")
+        # assert 0
+
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect_async")
     @pytest.mark.asyncio
@@ -185,6 +419,34 @@ class TestAioHtHeatpumpTCP:
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.parametrize(
+        "names",
+        [
+            random.sample(sorted(HtParams.keys()), cnt)
+            for cnt in range(len(HtParams) + 1)
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_query_with_names(
+        self, aiohthp_tcp: AioHtHeatpump, names: List[str]
+    ) -> None:
+        values = await aiohthp_tcp.query_async(*names)
+        # { "HKR Soll_Raum": 21.0,
+        #   "Stoerung": False,
+        #   "Temp. Aussen": 8.8,
+        #   # ...
+        #   }
+        assert isinstance(values, dict), "'values' must be of type dict"
+        assert not names or len(values) == len(set(names))
+        for name, value in values.items():
+            assert name in HtParams
+            assert not names or name in names
+            assert value is not None
+            assert HtParams[name].in_limits(value)
+        # assert 0
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
     @pytest.mark.asyncio
     async def test_fast_query(self, aiohthp_tcp: AioHtHeatpump) -> None:
         values = await aiohthp_tcp.fast_query_async()
@@ -196,6 +458,78 @@ class TestAioHtHeatpumpTCP:
             assert name in HtParams
             assert value is not None
             assert HtParams[name].in_limits(value)
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.parametrize(
+        "names",
+        [
+            random.sample(sorted(HtParams.of_type("MP").keys()), cnt)
+            for cnt in range(len(HtParams.of_type("MP")) + 1)
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_fast_query_with_names(
+        self, aiohthp_tcp: AioHtHeatpump, names: List[str]
+    ) -> None:
+        values = await aiohthp_tcp.fast_query_async(*names)
+        assert isinstance(values, dict), "'values' must be of type dict"
+        assert not names or len(values) == len(set(names))
+        for name, value in values.items():
+            assert name in HtParams
+            assert not names or name in names
+            assert value is not None
+            assert HtParams[name].in_limits(value)
+        # assert 0
+
+    @pytest.mark.asyncio
+    async def test_fast_query_with_names_raises_KeyError(
+        self, cmdopt_url: str
+    ) -> None:
+        hp = AioHtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
+        with pytest.raises(KeyError):
+            await hp.fast_query_async("BlaBlaBla")
+        # assert 0
+
+    @pytest.mark.parametrize(
+        "names",
+        [
+            random.sample(sorted(HtParams.of_type("SP").keys()), cnt)
+            for cnt in range(1, len(HtParams.of_type("SP")) + 1)
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_fast_query_with_names_raises_ValueError(
+        self, cmdopt_url: str, names: List[str]
+    ) -> None:
+        hp = AioHtHeatpump(url=cmdopt_url or "tcp://127.0.0.1:1234")
+        with pytest.raises(ValueError):
+            await hp.fast_query_async(*names)
+        # assert 0
+
+    # @pytest.mark.skip(reason="test needs a rework")
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.asyncio
+    async def test_fast_query_in_several_pieces(self, aiohthp_tcp: AioHtHeatpump) -> None:
+        args = []
+        cmd = ""
+        mp_data_points = [
+            (name, param) for name, param in HtParams.items() if param.dp_type == "MP"
+        ]
+        while len(cmd) < 255 * 2:  # request has do be done in 3 parts
+            name, param = random.choice(mp_data_points)
+            cmd += ",{}".format(param.dp_number)
+            args.append(name)
+        values = await aiohthp_tcp.fast_query_async(*args)
+        assert isinstance(values, dict), "'values' must be of type dict"
+        assert not args or len(values) == len(set(args))
+        for name, value in values.items():
+            assert name in HtParams
+            assert not args or name in args
+            assert value is not None
+            assert HtParams[name].in_limits(value)
+        # assert 0
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect_async")
@@ -222,6 +556,19 @@ class TestAioHtHeatpumpTCP:
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.parametrize("index", [-1, 5])
+    @pytest.mark.asyncio
+    async def test_get_time_prog_raises_IOError(
+        self, aiohthp_tcp: AioHtHeatpump, index: int
+    ) -> None:
+        with pytest.raises(IOError):
+            await aiohthp_tcp.get_time_prog_async(index, with_entries=False)
+        with pytest.raises(IOError):
+            await aiohthp_tcp.get_time_prog_async(index, with_entries=True)
+        # assert 0
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
     @pytest.mark.parametrize(
         "index, day, num",
         [
@@ -237,6 +584,24 @@ class TestAioHtHeatpumpTCP:
     ) -> None:
         entry = await aiohthp_tcp.get_time_prog_entry_async(index, day, num)
         assert isinstance(entry, TimeProgEntry), "'entry' must be of type TimeProgEntry"
+
+    @pytest.mark.run_if_connected
+    @pytest.mark.usefixtures("reconnect_async")
+    @pytest.mark.parametrize(
+        "index, day, num",
+        [
+            (5, 0, 0),  # index=5 is invalid
+            (0, 7, 0),  # day=7 is invalid
+            (0, 0, 7),  # num=7 is invalid
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_get_time_prog_entry_raises_IOError(
+        self, aiohthp_tcp: AioHtHeatpump, index: int, day: int, num: int
+    ) -> None:
+        with pytest.raises(IOError):
+            await aiohthp_tcp.get_time_prog_entry_async(index, day, num)
+        # assert 0
 
     @pytest.mark.run_if_connected
     @pytest.mark.usefixtures("reconnect_async")
