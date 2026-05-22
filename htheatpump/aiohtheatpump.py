@@ -142,8 +142,9 @@ class AioHtHeatpump(HtHeatpump):
                 # logout_async also closes the connection
                 await hp.logout_async()
 
-        asyncio.run(run())
     """
+
+    _ser: Optional[aioserial.AioSerial]
 
     def __init__(
         self,
@@ -231,17 +232,6 @@ class AioHtHeatpump(HtHeatpump):
 
         # update the settings for later connection establishment
         if self._ser_settings:
-            # Ensure loop is available for aioserial
-            if self._loop is None:
-                try:
-                    self._loop = asyncio.get_running_loop()
-                except RuntimeError:
-                    # If no loop running, create one (less ideal, depends on context)
-                    # Or raise an error if loop is strictly required
-                    # self._loop = asyncio.new_event_loop()
-                    # asyncio.set_event_loop(self._loop)
-                    raise RuntimeError("asyncio event loop is required for AioHtHeatpump with serial.")
-
             self._ser_settings.update(
                 {
                     "loop": self._loop,
@@ -249,12 +239,7 @@ class AioHtHeatpump(HtHeatpump):
                     "cancel_write_timeout": cancel_write_timeout,
                 }
             )
-            # Initialize aioserial instance (but don't open yet)
-            # Parent __init__ sets self._ser to None, override here
-            self._ser = aioserial.AioSerial(**self._ser_settings)
-        else:
-            # If URL is used, parent __init__ sets self._ser to None, which is correct
-            self._ser = None
+        self._ser = None
 
         # _sock_settings is populated by parent __init__ if url was provided
 
@@ -281,7 +266,7 @@ class AioHtHeatpump(HtHeatpump):
                 try:
                     self._loop = asyncio.get_running_loop()
                 except RuntimeError:
-                    raise RuntimeError("asyncio event loop is required for AioHtHeatpump with serial.")
+                    self._loop = None
             # Update loop in settings if it was None before
             self._ser_settings["loop"] = self._loop
             self._ser = aioserial.AioSerial(**self._ser_settings)
@@ -313,9 +298,10 @@ class AioHtHeatpump(HtHeatpump):
                     raise IOError(f"failed to open serial connection {self._ser.port}: {e}") from e
 
         elif self._sock_settings:
-            host, port = self._sock_settings["address"]
+            address = cast(Tuple[Optional[str], int], self._sock_settings["address"])
+            host, port = address
             # Use timeout from settings, fallback to default
-            timeout = self._sock_settings.get("timeout")
+            timeout = cast(Optional[float], self._sock_settings.get("timeout"))
             if timeout is None:
                 timeout = self.DEFAULT_TIMEOUT
 
@@ -460,7 +446,7 @@ class AioHtHeatpump(HtHeatpump):
             raise IOError("TCP connection not established or reader is missing")
 
         # Use timeout from settings for the read operation
-        timeout = self._sock_settings.get("timeout") if self._sock_settings else None
+        timeout = cast(Optional[float], self._sock_settings.get("timeout")) if self._sock_settings else None
         if timeout is None:
             timeout = self.DEFAULT_TIMEOUT
 
@@ -523,7 +509,7 @@ class AioHtHeatpump(HtHeatpump):
         if self._ser_settings:
             read_timeout = self._ser.timeout if self._ser else self.DEFAULT_TIMEOUT
         elif self._sock_settings:
-            read_timeout = self._sock_settings.get("timeout", self.DEFAULT_TIMEOUT)
+            read_timeout = cast(Optional[Union[float, int]], self._sock_settings.get("timeout", self.DEFAULT_TIMEOUT))
         if read_timeout is None:
             read_timeout = self.DEFAULT_TIMEOUT  # Ensure a value
 

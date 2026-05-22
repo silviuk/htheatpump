@@ -28,7 +28,7 @@ import logging
 import re
 import time
 from types import TracebackType
-from typing import Final, Dict, List, Optional, Set, Tuple, Type, Union, cast
+from typing import Any, Final, Dict, List, Optional, Set, Tuple, Type, Union, cast
 
 import serial
 import socket
@@ -212,6 +212,11 @@ class HtHeatpump:
             hp.close_connection()
     """
 
+    _ser_settings: Optional[Dict[str, Any]]
+    _sock_settings: Optional[Dict[str, Any]]
+    _ser: Optional[serial.Serial]
+    _sock: Optional[socket.socket]
+
     DEFAULT_TIMEOUT: Final[int] = 5
     """Timeout value in seconds; normally no need to change it."""
 
@@ -286,14 +291,18 @@ class HtHeatpump:
 
     def __del__(self) -> None:
         # close the connection if still established
-        if getattr(self, "_ser_settings", None) is not None:  # Check if serial was configured
-            if getattr(self, "_ser", None) and self._ser.is_open:
+        ser_settings = getattr(self, "_ser_settings", None)
+        sock_settings = getattr(self, "_sock_settings", None)
+        if ser_settings is not None:  # Check if serial was configured
+            ser = getattr(self, "_ser", None)
+            if ser is not None and getattr(ser, "is_open", False):
                 # close the serial connection
-                self._ser.close()
-        elif getattr(self, "_sock_settings", None) is not None:  # Check if socket was configured
+                ser.close()
+        elif sock_settings is not None:  # Check if socket was configured
+            sock = getattr(self, "_sock", None)
             # close the socket connection
-            if getattr(self, "_sock", None):
-                self._sock.close()
+            if sock is not None:
+                sock.close()
 
     def __enter__(self) -> HtHeatpump:
         self.open_connection()
@@ -327,7 +336,9 @@ class HtHeatpump:
             if self._sock:
                 raise IOError("TCP connection already established")
             # establish the connection
-            self._sock = socket.create_connection(**self._sock_settings)
+            address = cast(Tuple[Optional[str], int], self._sock_settings["address"])
+            timeout = cast(Optional[float], self._sock_settings.get("timeout"))
+            self._sock = socket.create_connection(address, timeout=timeout)
             _LOGGER.info(self._sock)  # log connection properties
         else:
             # This should not happen due to the check in __init__
@@ -388,6 +399,7 @@ class HtHeatpump:
                 return False  # socket was closed for some other reason
             finally:
                 self._sock.setblocking(True)
+        return False
 
     @property
     def verify_param_action(self) -> Set[VerifyAction]:
@@ -469,7 +481,7 @@ class HtHeatpump:
         while pos < size:
             read = self._sock.recv_into(view[pos:], size - pos, flags)
             if not read:
-                return read
+                return bytes(buffer[:pos])
             pos += read
         return bytes(buffer)
 
@@ -531,7 +543,7 @@ class HtHeatpump:
 
         # read the length of the following payload
         try:
-            if self._ser_settings is not None:
+            if self._ser is not None:
                 payload_len_r = self._ser.read(1)
             else:  # Socket
                 payload_len_r = self._socket_recvall(1)
@@ -556,7 +568,7 @@ class HtHeatpump:
             while payload[-2:] != b"\r\n":
                 try:
                     # --- Start of Correction 1 ---
-                    if self._ser_settings is not None:  # Check self._ser_settings
+                    if self._ser is not None:  # Check self._ser
                         tmp = self._ser.read(1)
                     else:  # Socket (self._sock_settings must be not None)
                         tmp = self._socket_recvall(1)
@@ -573,7 +585,7 @@ class HtHeatpump:
         else:
             # read the payload itself
             try:
-                if self._ser_settings is not None:  # Check self._ser_settings
+                if self._ser is not None:  # Check self._ser
                     payload = self._ser.read(payload_len_r)  # Read using the original reported length
                 else:  # Socket (self._sock_settings must be not None)
                     payload = self._socket_recvall(payload_len_r)  # Read using the original reported length
@@ -587,7 +599,7 @@ class HtHeatpump:
         payload_len = RESPONSE_HEADER[header]["payload_len"](payload_len)
         # read the checksum and verify the validity of the response
         try:
-            if self._ser_settings is not None:
+            if self._ser is not None:
                 checksum = self._ser.read(1)
             else:  # Socket
                 checksum = self._socket_recvall(1)
@@ -605,7 +617,7 @@ class HtHeatpump:
         if checksum != comp_checksum:
             raise IOError(
                 "invalid checksum [{}] of response "
-                "[header={}, payload_len={:d}({:d}), payload={}, checksum={}]".format(
+                "[header={!r}, payload_len={:d}({:d}), payload={!r}, checksum={}]".format(
                     hex(checksum),
                     header,
                     payload_len,
@@ -628,7 +640,7 @@ class HtHeatpump:
         m = re.match(r"^~([^;]*);\r\n$", payload.decode("ascii"))
         if not m:
             raise IOError(
-                "failed to extract response data from payload [{}]".format(payload)
+                "failed to extract response data from payload [{!r}]".format(payload)
             )
         return m.group(1)
 
