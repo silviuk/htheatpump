@@ -590,7 +590,8 @@ class AioHtHeatpump(HtHeatpump):
                             raise IOError("data stream broken (received empty byte)")
                         payload += tmp
                     except asyncio.TimeoutError:
-                        raise asyncio.TimeoutError("overall timeout while reading payload ending with '\\r\\n'") from None
+                        raise asyncio.TimeoutError(
+                            "overall timeout while reading payload ending with '\\r\\n'") from None
                     except (IOError, aioserial.SerialException, socket.error, OSError) as e:
                         raise IOError(f"failed reading payload chunk (len=0): {e}") from e
 

@@ -98,7 +98,7 @@ To use ``htheatpump`` in a project take a look on the following example. After e
 with the Heliotherm heat pump one can interact with it by different functions like reading or writing
 parameters.
 
-The following examples assume a serial connection, with equivalent code TCP connections given as a comment.
+The following examples assume a serial connection, with equivalent code for TCP connections given as a comment.
 
 .. code:: python
 
