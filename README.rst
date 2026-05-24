@@ -40,7 +40,7 @@ Introduction
 
 This library provides a pure Python interface to access `Heliotherm <http://www.heliotherm.com/>`_ and
 `Brötje BSW NEO <https://www.broetje.de/>`_ heat pumps
-over a serial connection. It's compatible with Python version 3.8, 3.9 and 3.10.
+over a serial connection or over a TCP socket. It's compatible with Python version 3.8, 3.9 and 3.10.
 
 
 Features
@@ -70,7 +70,7 @@ Tested with [*]_
 * Heliotherm HP-30-L-M-WEB, SW 3.0.21
 * Brötje BSW NEO 8 SW 3.0.38
 
-  .. [*] thanks to Kilian, Hans, Alois, Simon, Felix (`FelixPetriconi <https://github.com/FelixPetriconi>`_) and Matthias for contribution
+  .. [*] thanks to Kilian, Hans, Alois, Simon, Felix (`FelixPetriconi <https://github.com/FelixPetriconi>`_), Matthias and Silviu (`Silviu <https://github.com/silviuk>`_) for contribution
 
 
 Installation
@@ -98,11 +98,17 @@ To use ``htheatpump`` in a project take a look on the following example. After e
 with the Heliotherm heat pump one can interact with it by different functions like reading or writing
 parameters.
 
+The following examples assume a serial connection, with equivalent code TCP connections given as a comment.
+
 .. code:: python
 
     from htheatpump import HtHeatpump
 
+    # Serial connection
     hp = HtHeatpump("/dev/ttyUSB0", baudrate=9600)
+    # or serial-over-TCP connection
+    hp = HtHeatpump(url="tcp://192.168.1.100:9999")
+    
     try:
         hp.open_connection()
         hp.login()
@@ -118,7 +124,11 @@ parameters.
 
     from htheatpump import AioHtHeatpump
 
+    # Serial connection
     hp = AioHtHeatpump("/dev/ttyUSB0", baudrate=9600)
+    # or TCP connection
+    hp = AioHtHeatpump(url="tcp://192.168.1.100:9999")
+    
     try:
         hp.open_connection()
         await hp.login_async()
@@ -139,6 +149,11 @@ can be run immediately after installation, e.g.:
 .. code-block:: shell
 
     $ htquery --device /dev/ttyUSB1 "Temp. Aussen" "Stoerung"
+    # $ htquery --url "tcp://192.168.1.2:9999" "Temp. Aussen" "Stoerung" # for TCP connection
+    Stoerung    : False
+    Temp. Aussen: 5.0
+
+    $ htquery --url "tcp://192.168.1.100:9999" "Temp. Aussen" "Stoerung"
     Stoerung    : False
     Temp. Aussen: 5.0
 

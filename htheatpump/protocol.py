@@ -20,7 +20,7 @@
 """ Protocol constants and functions for the Heliotherm heat pump communication. """
 
 
-from typing import Final
+from typing import Any, Dict, Final
 
 # ------------------------------------------------------------------------------------------------------------------- #
 # Protocol constants
@@ -31,7 +31,7 @@ MAX_CMD_LENGTH: Final = 253  # 253 = 255 - 1 byte for header - 1 byte for traile
 
 REQUEST_HEADER: Final = b"\x02\xfd\xd0\xe0\x00\x00"
 RESPONSE_HEADER_LEN: Final = 6  # response header length
-RESPONSE_HEADER: Final = {
+RESPONSE_HEADER: Final[Dict[bytes, Dict[str, Any]]] = {
     #
     # NOTE:
     # =====

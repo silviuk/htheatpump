@@ -1,6 +1,10 @@
 History
 =======
 
+1.3.4 (2025-04-21)
+------------------
+* ported support for connecting to the heat pump serial port over a TCP socket
+
 1.3.3 (2023-??-??)
 ------------------
 

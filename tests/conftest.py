@@ -27,6 +27,7 @@ def pytest_addoption(parser: Any) -> None:
     parser.addoption("--connected", action="store_true", dest="run_if_connected", default=False)
     parser.addoption("--device", action="store", default="/dev/ttyUSB0")
     parser.addoption("--baudrate", action="store", default=115200)
+    parser.addoption("--url", action="store", default=None, help="TCP URL for testing (e.g., tcp://192.168.1.100:9999)")
     parser.addoption("--loglevel", action="store", default=logging.WARNING)
 
 
@@ -40,6 +41,9 @@ def pytest_configure(config: Any) -> None:
     print("connected: {}".format("NO" if not config.option.run_if_connected else "YES"))
     print("device: {}".format(config.getoption("--device")))
     print("baudrate: {:d}".format(int(config.getoption("--baudrate"))))
+    url = config.getoption("--url")
+    if url:
+        print("url: {}".format(url))
     print("loglevel: {:d}".format(loglevel))
 
 
@@ -51,3 +55,8 @@ def cmdopt_device(request: Any) -> Any:
 @pytest.fixture(scope="session")
 def cmdopt_baudrate(request: Any) -> Any:
     return request.config.getoption("--baudrate")
+
+
+@pytest.fixture(scope="session")
+def cmdopt_url(request: Any) -> Any:
+    return request.config.getoption("--url")

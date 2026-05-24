@@ -24,6 +24,8 @@
     .. code-block:: shell
 
        $ python3 htshell.py --device /dev/ttyUSB1 --baudrate 9600 "AR,28,29,30" -r 3
+       or
+       $ python3 htshell.py --url "tcp://localhost:9999" "AR,28,29,30" -r 3
        > 'AR,28,29,30'
        < 'AA,28,19,14.09.14-02:08:56,EQ_Spreizung'
        < 'AA,29,20,14.09.14-11:52:08,EQ_Spreizung'
@@ -56,6 +58,8 @@ def main() -> None:
             Example:
 
               $ python3 htshell.py --device /dev/ttyUSB1 "AR,28,29,30" -r 3
+              or
+              $ python3 htshell.py --url "tcp://localhost:9999" "AR,28,29,30" -r 3
               > 'AR,28,29,30'
               < 'AA,28,19,14.09.14-02:08:56,EQ_Spreizung'
               < 'AA,29,20,14.09.14-11:52:08,EQ_Spreizung'
@@ -79,6 +83,13 @@ def main() -> None:
             """
         )
         + "\r\n",
+    )
+
+    parser.add_argument(
+        "-u",
+        "--url",
+        type=str,
+        help="the (TCP socket) url on which the heat pump is connected",
     )
 
     parser.add_argument(
@@ -125,6 +136,14 @@ def main() -> None:
         help="command(s) to send to the heat pump (without the preceding '~' and the trailing ';')",
     )
 
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        # Use the default timeout defined in the HtHeatpump class
+        default=HtHeatpump.DEFAULT_TIMEOUT,
+        help="connection timeout in seconds, default: %(default)s",
+    )
+
     args = parser.parse_args()
 
     # activate logging with level DEBUG in verbose mode
@@ -134,8 +153,17 @@ def main() -> None:
     else:
         logging.basicConfig(level=logging.WARNING, format=log_format)
 
-    hp = HtHeatpump(args.device, baudrate=args.baudrate)
     try:
+        if (args.url):
+            # Use keyword argument 'url'
+            hp = HtHeatpump(url=args.url, timeout=args.timeout)
+            if args.verbose:
+                _LOGGER.info("--url specified, using url-based connection: %s", args.url)
+        else:
+            # Use keyword argument 'device' and pass serial-specific options
+            hp = HtHeatpump(device=args.device, baudrate=args.baudrate, timeout=args.timeout)
+            if args.verbose:
+                _LOGGER.info("--device specified, using serial connection: %s", args.device)
         hp.open_connection()
         hp.login()
 

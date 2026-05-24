@@ -139,6 +139,28 @@ def test_create_request(cmd: str, result: bytes) -> None:
     # assert 0
 
 
+# TCP Socket Tests
+def test_AioHtHeatpump_tcp_init_valid_url() -> None:
+    """Test async TCP initialization with valid URL."""
+    hp = AioHtHeatpump(url="tcp://192.168.1.100:9999")
+    assert hp._sock_settings is not None
+    assert hp._sock_settings["address"] == ("192.168.1.100", 9999)
+    assert hp._sock_settings["timeout"] == AioHtHeatpump.DEFAULT_TIMEOUT
+    assert hp._ser_settings is None
+
+
+def test_AioHtHeatpump_tcp_init_invalid_scheme() -> None:
+    """Test that invalid URL scheme raises ValueError."""
+    with pytest.raises(ValueError, match="invalid scheme for url, must be 'tcp'"):
+        AioHtHeatpump(url="ftp://localhost:9999")
+
+
+def test_AioHtHeatpump_tcp_init_both_device_and_url() -> None:
+    """Test that providing both device and url raises ValueError."""
+    with pytest.raises(ValueError, match="Exactly one of 'device' or 'url' must be provided"):
+        AioHtHeatpump(device="/dev/ttyUSB0", url="tcp://localhost:9999")
+
+
 @pytest.mark.run_if_connected
 def test_AioHtHeatpump_init_del(cmdopt_device: str, cmdopt_baudrate: int) -> None:
     hp = AioHtHeatpump(device=cmdopt_device, baudrate=cmdopt_baudrate)
@@ -150,8 +172,34 @@ def test_AioHtHeatpump_init_del(cmdopt_device: str, cmdopt_baudrate: int) -> Non
 
 
 @pytest.mark.run_if_connected
+def test_AioHtHeatpump_tcp_init_del(cmdopt_url: str) -> None:
+    """Test async TCP connection initialization and cleanup."""
+    if not cmdopt_url:
+        pytest.skip("No TCP URL provided")
+    hp = AioHtHeatpump(url=cmdopt_url)
+    assert not hp.is_open
+    hp.open_connection()
+    assert hp.is_open
+    del hp  # AioHtHeatpump.__del__ should be executed here!
+    # assert 0
+
+
+@pytest.mark.run_if_connected
 def test_AioHtHeatpump_enter_exit(cmdopt_device: str, cmdopt_baudrate: int) -> None:
     with AioHtHeatpump(device=cmdopt_device, baudrate=cmdopt_baudrate) as hp:
+        assert hp is not None
+        assert hp.is_open
+    assert hp is not None
+    assert not hp.is_open
+    # assert 0
+
+
+@pytest.mark.run_if_connected
+def test_AioHtHeatpump_tcp_enter_exit(cmdopt_url: str) -> None:
+    """Test async TCP connection with context manager."""
+    if not cmdopt_url:
+        pytest.skip("No TCP URL provided")
+    with AioHtHeatpump(url=cmdopt_url) as hp:
         assert hp is not None
         assert hp.is_open
     assert hp is not None
