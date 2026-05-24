@@ -395,8 +395,8 @@ class HtHeatpump:
                 return len(data) > 0
             except BlockingIOError:
                 return True  # socket is open and reading from it would block
-            except ConnectionResetError:
-                return False  # socket was closed for some other reason
+            except OSError:
+                return False  # socket was closed or has some other error
             finally:
                 self._sock.setblocking(True)
         return False

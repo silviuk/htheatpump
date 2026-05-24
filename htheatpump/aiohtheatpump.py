@@ -405,8 +405,13 @@ class AioHtHeatpump(HtHeatpump):
             # Check aioserial instance and its state
             return self._ser is not None and self._ser.is_open
         elif self._sock_settings:
-            # Check if writer exists and is not closing/closed
-            return self._writer is not None and not self._writer.is_closing()
+            # Check if writer exists and is not closing/closed, and reader is not EOF
+            return (
+                self._writer is not None
+                and not self._writer.is_closing()
+                and self._reader is not None
+                and not self._reader.at_eof()
+            )
         return False
 
     # --- Communication Methods ---
@@ -564,30 +569,28 @@ class AioHtHeatpump(HtHeatpump):
             if payload_len_r == 0:
                 _LOGGER.info("received response with a payload length zero; reading until '\\r\\n' [header=%r]", header)
                 payload = b""
-                # Use a loop with timeout for each byte read
+                # Use a loop with dynamic remaining timeout for each byte read
                 loop_start_time = asyncio.get_running_loop().time()
                 while payload[-2:] != b"\r\n":
                     # Check overall timeout for this loop
-                    if (asyncio.get_running_loop().time() - loop_start_time) > read_timeout:
+                    elapsed = asyncio.get_running_loop().time() - loop_start_time
+                    remaining_timeout = read_timeout - elapsed
+                    if remaining_timeout <= 0:
                         raise asyncio.TimeoutError("overall timeout while reading payload ending with '\\r\\n'")
 
                     try:
-                        # Read one byte with a smaller, per-byte timeout or rely on overall
-                        byte_timeout = min(0.5, read_timeout)  # Example: 0.5s per byte
                         if self._ser_settings:
                             if not self._ser:
                                 raise IOError("serial connection not initialized")
-                            tmp = await asyncio.wait_for(self._ser.read_async(1), timeout=byte_timeout)
+                            tmp = await asyncio.wait_for(self._ser.read_async(1), timeout=remaining_timeout)
                         else:  # Socket
-                            tmp = await asyncio.wait_for(self._socket_recvall_async(1), timeout=byte_timeout)
+                            tmp = await asyncio.wait_for(self._socket_recvall_async(1), timeout=remaining_timeout)
 
                         if not tmp:
                             raise IOError("data stream broken (received empty byte)")
                         payload += tmp
                     except asyncio.TimeoutError:
-                        # This might happen if there's a pause, continue loop if overall timeout not exceeded
-                        _LOGGER.debug("per-byte read timeout, continuing if overall time allows.")
-                        continue
+                        raise asyncio.TimeoutError("overall timeout while reading payload ending with '\\r\\n'") from None
                     except (IOError, aioserial.SerialException, socket.error, OSError) as e:
                         raise IOError(f"failed reading payload chunk (len=0): {e}") from e
 
