@@ -33,7 +33,7 @@ import time
 import serial
 
 from .htheatpump import HtHeatpump, VerifyAction
-from .htparams import HtParams, HtParamValueType
+from .htparams import HtParam, HtParams, HtParamValueType
 from .httimeprog import TimeProgEntry, TimeProgram
 from .protocol import (
     ALC_CMD,
@@ -1138,7 +1138,7 @@ class AioHtHeatpump(HtHeatpump):
             assert (
                 name in HtParams
             ), "parameter definition for parameter {!r} not found".format(name)
-            param = HtParams[name]  # type: ignore
+            param: HtParam = HtParams[name]  # type: ignore
             # send command to the heat pump
             await self.send_request_async(param.cmd())
             # ... and wait for the response
@@ -1265,7 +1265,7 @@ class AioHtHeatpump(HtHeatpump):
                 raise KeyError(
                     "parameter definition for parameter {!r} not found".format(name)
                 )
-            param = HtParams[name]  # type: ignore
+            param: HtParam = HtParams[name]  # type: ignore
             # check the passed value against the defined limits (if desired)
             if not ignore_limits and not param.in_limits(val):
                 raise ValueError(
@@ -1274,8 +1274,8 @@ class AioHtHeatpump(HtHeatpump):
                     )
                 )
             # send command to the heat pump
-            val = param.to_str(val)
-            await self.send_request_async("{},VAL={}".format(param.cmd(), val))
+            val_str = param.to_str(val)
+            await self.send_request_async("{},VAL={}".format(param.cmd(), val_str))
             # ... and wait for the response
             try:
                 resp = await self.read_response_async()
@@ -1316,7 +1316,7 @@ class AioHtHeatpump(HtHeatpump):
                 raise KeyError(
                     "parameter definition for parameter {!r} not found".format(name)
                 )
-            param = HtParams[name]  # type: ignore
+            param: HtParam = HtParams[name]  # type: ignore
             # check the passed value against the defined limits (if desired)
             if not ignore_limits and not param.in_limits(val):
                 raise ValueError(
@@ -1328,8 +1328,8 @@ class AioHtHeatpump(HtHeatpump):
             if val is None:
                 await self.send_request_async("{},ORF=0".format(param.cmd()))
             else:
-                val = param.to_str(val)
-                await self.send_request_async("{},ORV={},ORF=1".format(param.cmd(), val))
+                val_str = param.to_str(val)
+                await self.send_request_async("{},ORV={},ORF=1".format(param.cmd(), val_str))
             # ... and wait for the response
             try:
                 resp = await self.read_response_async()
@@ -1434,7 +1434,7 @@ class AioHtHeatpump(HtHeatpump):
                     raise KeyError(
                         "parameter definition for parameter {!r} not found".format(name)
                     )
-                param = HtParams[name]  # type: ignore
+                param: HtParam = HtParams[name]  # type: ignore
                 if param.dp_type != "MP":
                     raise ValueError(
                         "invalid parameter {!r}; only parameters representing a 'MP' data point are allowed".format(

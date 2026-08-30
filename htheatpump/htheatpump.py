@@ -34,7 +34,7 @@ import serial
 import socket
 from urllib.parse import urlparse
 
-from .htparams import HtParams, HtParamValueType
+from .htparams import HtParam, HtParams, HtParamValueType
 from .httimeprog import TimeProgEntry, TimeProgram
 from .protocol import (
     ALC_CMD,
@@ -1052,7 +1052,7 @@ class HtHeatpump:
         assert (
             name in HtParams
         ), "parameter definition for parameter {!r} not found".format(name)
-        param = HtParams[name]  # type:ignore
+        param: HtParam = HtParams[name]  # type: ignore
         # search for pattern "NAME=...", "VAL=...", "MAX=..." and "MIN=..." inside the response string
         m = re.match(
             r"^{},.*NAME=([^,]+).*VAL=([^,]+).*MAX=([^,]+).*MIN=([^,]+).*$".format(
@@ -1111,7 +1111,7 @@ class HtHeatpump:
         assert (
             name in HtParams
         ), "parameter definition for parameter {!r} not found".format(name)
-        param = HtParams[name]  # type: ignore
+        param: HtParam = HtParams[name]  # type: ignore
         # send command to the heat pump
         self.send_request(param.cmd())
         # ... and wait for the response
@@ -1158,7 +1158,7 @@ class HtHeatpump:
         assert (
             name in HtParams
         ), "parameter definition for parameter {!r} not found".format(name)
-        param = HtParams[name]  # type: ignore
+        param: HtParam = HtParams[name]  # type: ignore
         try:
             # verify 'NAME'
             if (VerifyAction.NAME in self._verify_param_action) and (resp_name != name):
@@ -1323,7 +1323,7 @@ class HtHeatpump:
             raise KeyError(
                 "parameter definition for parameter {!r} not found".format(name)
             )
-        param = HtParams[name]  # type: ignore
+        param: HtParam = HtParams[name]  # type: ignore
         # check the passed value against the defined limits (if desired)
         if not ignore_limits and not param.in_limits(val):
             raise ValueError(
@@ -1332,8 +1332,8 @@ class HtHeatpump:
                 )
             )
         # send command to the heat pump
-        val = param.to_str(val)
-        self.send_request("{},VAL={}".format(param.cmd(), val))
+        val_str = param.to_str(val)
+        self.send_request("{},VAL={}".format(param.cmd(), val_str))
         # ... and wait for the response
         try:
             resp = self.read_response()
@@ -1356,7 +1356,7 @@ class HtHeatpump:
             raise KeyError(
                 "parameter definition for parameter {!r} not found".format(name)
             )
-        param = HtParams[name]  # type: ignore
+        param: HtParam = HtParams[name]  # type: ignore
         # check the passed value against the defined limits (if desired)
         if not ignore_limits and not param.in_limits(val):
             raise ValueError(
@@ -1368,8 +1368,8 @@ class HtHeatpump:
         if val is None:
             self.send_request("{},ORF=0".format(param.cmd()))
         else:
-            val = param.to_str(val)
-            self.send_request("{},ORV={},ORF=1".format(param.cmd(), val))
+            val_str = param.to_str(val)
+            self.send_request("{},ORV={},ORF=1".format(param.cmd(), val_str))
         # ... and wait for the response
         try:
             resp = self.read_response()
@@ -1473,7 +1473,7 @@ class HtHeatpump:
                 raise KeyError(
                     "parameter definition for parameter {!r} not found".format(name)
                 )
-            param = HtParams[name]  # type: ignore
+            param: HtParam = HtParams[name]  # type: ignore
             if param.dp_type != "MP":
                 raise ValueError(
                     "invalid parameter {!r}; only parameters representing a 'MP' data point are allowed".format(

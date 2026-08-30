@@ -22,7 +22,7 @@
 from __future__ import annotations
 
 import timeit
-from typing import Any
+from typing import Any, ClassVar
 
 
 class Singleton:
@@ -48,6 +48,8 @@ class Singleton:
     .. seealso::
         https://mail.python.org/pipermail/python-list/2007-July/431423.html
     """
+
+    _inst: ClassVar[Any]
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Singleton:
         """Create a new instance."""
