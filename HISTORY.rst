@@ -1,6 +1,13 @@
 History
 =======
 
+1.3.5 (2026-10-24)
+------------------
+* fix: ``AioHtHeatpump.read_response_async`` used the raw (zero) payload length byte instead of the
+  actual payload length for the header-specific length correction, raising
+  ``ValueError: bytes must be in range(0, 256)`` (e.g. in ``fast_query_async``); an out-of-range
+  corrected length now raises ``IOError``
+
 1.3.4 (2025-04-21)
 ------------------
 * ported support for connecting to the heat pump serial port over a TCP socket
