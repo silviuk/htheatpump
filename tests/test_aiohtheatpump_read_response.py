@@ -55,7 +55,9 @@ def make_hp(data: bytes) -> AioHtHeatpump:
     return hp
 
 
-def make_response(header: bytes, payload: bytes, len_byte: Optional[int] = None, checksum: Optional[int] = None) -> bytes:
+def make_response(
+    header: bytes, payload: bytes, len_byte: Optional[int] = None, checksum: Optional[int] = None
+) -> bytes:
     """Build a raw response; by default the length byte is len(payload) and the checksum the "correct" one."""
     if len_byte is None:
         len_byte = len(payload)
