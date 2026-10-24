@@ -617,7 +617,18 @@ class AioHtHeatpump(HtHeatpump):
 
         # Correct payload length for checksum computation based on header
         # Call the function to get the corrected length value
-        corrected_payload_len_val = RESPONSE_HEADER[header]["payload_len"](payload_len_r)
+        #   (for a reported payload length of zero use the actual length of the received payload)
+        corrected_payload_len_val = RESPONSE_HEADER[header]["payload_len"](
+            actual_payload_len if payload_len_r == 0 else payload_len_r
+        )
+        if not 0 <= corrected_payload_len_val <= 255:
+            error_msg = (
+                f"invalid payload length [{corrected_payload_len_val}] of response "
+                f"[header={header!r}, payload_len_r={payload_len_r}, actual={actual_payload_len}]"
+            )
+            _LOGGER.error(error_msg)
+            await self.close_connection_async()
+            raise IOError(error_msg)
 
         # Read checksum byte
         try:
